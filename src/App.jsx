@@ -1119,7 +1119,7 @@ export default function App(){
                     <div>
                       <div className="mb-2">{card.lines[0]}</div>
                       <details className="mt-1">
-                        <summary className="cursor-pointer text-white/80">Lösung anzeigen</summary>
+                        <summary className="cursor-pointer text-white/80">Lösung anzeigen!</summary>
                         <div className="mt-1 text-white/90">{card.solution}</div>
                       </details>
                     </div>
