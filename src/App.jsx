@@ -1137,8 +1137,8 @@ export default function App(){
         )}
 
         {/* Favoriten/Settings – Coming soon */}
-        {tab==="fav" && (<Section title="Favoriten"><p className="text-sm text-white/70">Coming soon ✨</p></Section>)}
-        {tab==="settings" && (<Section title="Einstellungen"><p className="text-sm text-white/70">Coming soon ✨</p></Section>)}
+        {tab==="fav" && (<Section title="Favoriten"><p className="text-sm text-white/70">✨Coming soon✨</p></Section>)}
+        {tab==="settings" && (<Section title="Einstellungen"><p className="text-sm text-white/70">✨Coming soon✨</p></Section>)}
       </div>
 
       <BottomNav tab={tab} setTab={setTab}/>
