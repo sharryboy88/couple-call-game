@@ -1,24 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { motion, AnimatePresence } from "framer-motion";
+import { Heart, Home, Settings, Star, Check } from "lucide-react";
 
 /****************************************************
- * Couple Call Games – Vollversion mit Realtime Sync
- * - Alle Modi (WYR, ToD, Match, Categories, Trivia)
- * - Beep nur am Timer-Ende
- * - Präsenzpunkt (rot/grün)
- * - ✅ Echtzeit-Synchronisierung: mode, round, p1, p2, spice, seconds, MatchMeter
+ * Couple Call Games – WOW-Design + bunte Modus-Buttons (Listenlayout)
+ * - Präsenz-Indikator (rot/grün) neben Room Code
+ * - Spicy-Button mit leichtem Abstand
+ * - Bottom-Nav: Home, Favoriten, Einstellungen
+ * - ToD: Auswahl-Buttons für Wahrheit / Pflicht + Realtime-Sync
  ****************************************************/
 
-/*********************
- * Supabase Setup
- *********************/
 const SUPABASE_URL = "https://qelpirfwoycjfcgvajud.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlbHBpcmZ3b3ljamZjZ3ZhanVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUyNzQ0MDksImV4cCI6MjA3MDg1MDQwOX0.HwqCDMNN5JLgFj_geqhzXdFhocUeU2GrfB_9QK7DlRM";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlbHBpcmZ3b3ljamZjZ3ZhanVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUyNzQ0MDksImV4cCI6MjA3MDg1MDQwOX0.HwqCDMNN5JLgFj_geqhzXdFhocUeU2GrfB_9QK7DlRM";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/*********************
- * Tone: Beep am Ende
- *********************/
+/* ------ Beep ------ */
 function playBeep(duration = 1.0, frequency = 880, volume = 0.5) {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -37,21 +35,13 @@ function playBeep(duration = 1.0, frequency = 880, volume = 0.5) {
   } catch {}
 }
 
-/*********************
- * Deterministisches RNG
- *********************/
-function hashStringToSeed(str) {
-  let h = 2166136261 >>> 0;
-  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return (h >>> 0) || 0x9e3779b9;
-}
-function makeRNG(seedStr) { let x = hashStringToSeed(seedStr); return function rand(){ x ^= x<<13; x ^= x>>>17; x ^= x<<5; return ((x>>>0)/4294967296);};}
-function makePicker(seedStr){ const r=makeRNG(seedStr); return (arr)=>{ if(!arr||!arr.length) return ""; return arr[Math.floor(r()*arr.length)]; }}
-function randomLetter(rng){ const letters="ABCDEFGHIJKLMNOPQRSTUVWXYZ"; return letters[Math.floor(rng()*letters.length)]; }
+/* ------ RNG ------ */
+function hashStringToSeed(str){let h=2166136261>>>0;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}return(h>>>0)||0x9e3779b9;}
+function makeRNG(seedStr){let x=hashStringToSeed(seedStr);return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return(x>>>0)/4294967296;};}
+function makePicker(seedStr){const r=makeRNG(seedStr);return arr=>!arr?.length?"" : arr[Math.floor(r()*arr.length)];}
+function randomLetter(rng){const L="ABCDEFGHIJKLMNOPQRSTUVWXYZ";return L[Math.floor(rng()*L.length)];}
 
-/*********************
- * Kartenpools (gekürzt – erweiterbar)
- *********************/
+/* ------ Kartenpools ------ */
 const WYR_CUTE = [
   "Würdest du eher die Welt bereisen oder dein Traumhaus bauen?",
   "Würdest du eher gemeinsam ein Unternehmen gründen oder für eine Firma arbeiten?",
@@ -122,6 +112,9 @@ const WYR_CUTE = [
   "Würdest du lieber ein:e berühmte:r Sänger:in oder Schauspieler:in sein?",
   "Würdest du eher nie wieder lachen können oder nie wieder weinen?",
   "Würdest du lieber nur noch mit einem Piratenschiff reisen oder mit einem Raumschiff?",
+
+];
+const WYR_SPICY = [
   "Würdest du lieber jedes Mal ,wenn du Sex hast lachen müssen oder weinen?",
   "Würdest du eher nie wieder Küssen oder nie wieder Kuscheln?",
   "Würdest du lieber deine geheimsten Fantasien verraten oder die deines/deiner Partner:in erfahren?",
@@ -150,9 +143,7 @@ const WYR_CUTE = [
   "Würdest du eher mit deiner/deinem besten Freund:in schlafen oder mit deinem Chef?",
   "Würdest du lieber ein intimes Abendessen zu Hause haben oder eine wilde Nacht im Club?",
   "Würdest du eher eine Massage oder einen Striptease vor dem Sex bekommen?",
-  "Würdest du lieber ein Sextape von dir im Internet finden oder das von einem Freund sehen?"
-];
-const WYR_SPICY = [
+  "Würdest du lieber ein Sextape von dir im Internet finden oder das von einem Freund sehen?",
   "Würdest du lieber ein Ständchen von deinem Partner/deiner Partnerin bekommen oder einen romantischen Liebesbrief?",
   "Würdest du eher Sex mit Licht oder ohne Licht haben?",
   "Würdest du eher morgens oder abends Sex haben?",
@@ -437,6 +428,8 @@ const DARE_PROMPTS = [
   "Beschreibe, was du gerade riechst/hörst/siehst – schnell.",
   "Schicke mir einen Screenshot deiner Musik‑Playlist (wenn ok)."
 ];
+const TRUTH_SPICY=[ "Was würdest du mir nur flüsternd ins Ohr sagen?","Welche geheime Fantasie würdest du mit mir ausprobieren?","Was war bisher dein kuss-intensivster Moment mit mir?","Welche Berührung lässt dir sofort warm werden?","Welche 3 Wörter beschreiben unser spicy-Level?" ];
+const DARE_SPICY=[ "Schicke eine süße (nicht explizite) Sprachnachricht mit Komplimenten.","Beschreibe mir flüsternd unser perfektes Kuss-Szenario.","Wähle einen Körperteil und gib ihm verbal 3 Sterne-Bewertungen 😉","Sende 3 Codewörter für einen spicy Abend.","Sag mir 10 Sekunden lang nur ‚du bist heiß‘ – in Variationen." ];
 const CATEGORIES = [
   "Früchte",
   "Gemüsesorten",
@@ -647,7 +640,7 @@ const TRIVIA = [
   { q: "Welche Wissenschaft untersucht das Verhalten?", a: "Psychologie" },
   { q: "Welche Skala misst Erdbebenstärke?", a: "Richterskala" }
 ];
-const MATCH_METER_QUESTIONS = [
+const MATCH_PROMPTS = [
   "Was wäre dein perfektes Date mit mir – vom Morgen bis zum Abend?",
   "Welche Reise passt gerade zu uns beiden – und warum?",
   "Welche Tradition sollen wir als Paar starten?",
@@ -752,322 +745,403 @@ const MATCH_METER_QUESTIONS = [
   "Was würde unser Zukunfts‑Ich uns raten?"
 ];
 
-/*********************
- * UI Helpers
- *********************/
+/* ------ String-Ähnlichkeit (ohne \p{…}) ------ */
+function stripDiacritics(s){return (s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"");}
+function norm(s){return stripDiacritics(String(s)).toLowerCase().replace(/[^a-z0-9äöüß\s]/gi,"").replace(/\s+/g," ").trim();}
+function tokens(s){return norm(s).split(" ").filter(Boolean);}
+function diceCoeff(a,b){const A=new Set(a),B=new Set(b);const inter=[...A].filter(x=>B.has(x)).length;return (2*inter)/(A.size+B.size||1);}
+function charSim(a,b){const x=norm(a),y=norm(b);const maxLen=Math.max(x.length,y.length)||1;let m=0;const ychars=y.split("");for(const ch of x){const i=ychars.indexOf(ch);if(i>-1){m++;ychars.splice(i,1);}}return m/maxLen;}
+function similarity(a,b){const ta=tokens(a),tb=tokens(b);return Math.round(Math.max(diceCoeff(ta,tb),charSim(a,b))*100);}
+
+/* ------ UI ------ */
 function Section({ title, children }) {
   return (
-    <div className="rounded-2xl bg-neutral-900/60 border border-neutral-800 p-4 md:p-6 shadow-xl">
+    <motion.div
+      initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.35}}
+      className="rounded-2xl p-5 md:p-6 shadow-xl border border-neutral-800 bg-neutral-900/60"
+    >
       <h2 className="text-lg md:text-xl font-semibold mb-3 text-white/90">{title}</h2>
       {children}
-    </div>
+    </motion.div>
   );
 }
-function Pill({ children }){ return <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-neutral-800 text-white/80 border border-neutral-700">{children}</span>; }
-function Timer({ seconds, onFinish }){
-  const [time,setTime]=useState(seconds); const prevRef=useRef(time); const tRef=useRef(null);
+function Pill({ children }) {
+  return <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-neutral-800 text-white/80 border border-neutral-700">{children}</span>;
+}
+function Timer({ seconds, onFinish }) {
+  const [time,setTime]=useState(seconds); const prev=useRef(time); const tRef=useRef(null);
   useEffect(()=>setTime(seconds),[seconds]);
   useEffect(()=>{ if(time<=0) return; tRef.current=setTimeout(()=>setTime(t=>t-1),1000); return()=>clearTimeout(tRef.current); },[time]);
-  useEffect(()=>{ if(prevRef.current>0 && time===0){ playBeep(); onFinish&&onFinish(); } prevRef.current=time; },[time,onFinish]);
+  useEffect(()=>{ if(prev.current>0 && time===0){ playBeep(); onFinish&&onFinish(); } prev.current=time; },[time,onFinish]);
   const pct=Math.max(0,Math.min(100,(time/seconds)*100));
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-sm text-white/80">Timer</span>
-        <span className="text-sm font-mono text-white/90">{time}s</span>
-      </div>
+      <div className="flex items-center justify-between mb-1"><span className="text-sm text-white/80">Timer</span><span className="text-sm font-mono text-white/90">{time}s</span></div>
       <div className="h-2 w-full bg-neutral-800 rounded-full overflow-hidden">
         <div className="h-full bg-white/90" style={{width:`${pct}%`,transition:"width 1s linear"}}/>
       </div>
     </div>
   );
 }
-function Counter({label,value,onChange}){
+function BottomNav({ tab, setTab }) {
+  const items = [
+    { id: "home", icon: Home, label: "Home" },
+    { id: "fav", icon: Star, label: "Favoriten" },
+    { id: "settings", icon: Settings, label: "Einstellungen" },
+  ];
+
   return (
-    <div className="flex items-center gap-2 bg-neutral-900/50 border border-neutral-800 px-2 py-1 rounded-xl">
-      <Pill>{label}</Pill>
-      <button className="px-3 py-1 rounded-lg bg-neutral-800 text-white/80 border border-neutral-700 hover:bg-neutral-700" onClick={()=>onChange(Math.max(0,value-1))}>−</button>
-      <span className="w-8 text-center font-mono text-white/90">{value}</span>
-      <button className="px-3 py-1 rounded-lg bg-neutral-800 text-white/80 border border-neutral-700 hover:bg-neutral-700" onClick={()=>onChange(value+1)}>+</button>
+    <div
+      className="fixed bottom-0 left-0 right-0 bg-black/60 backdrop-blur-lg border-t border-white/10 flex justify-around py-2 z-50"
+      style={{
+        paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+      }}
+    >
+      {items.map((it) => {
+        const Icon = it.icon;
+        return (
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            key={it.id}
+            onClick={() => setTab(it.id)}
+            className={`flex flex-col items-center text-xs ${
+              tab === it.id ? "text-white" : "text-white/60"
+            }`}
+          >
+            <Icon size={22} />
+            {it.label}
+          </motion.button>
+        );
+      })}
     </div>
   );
 }
-function useLocalStorage(key, initial){ const [s,ss]=useState(()=>{ try{const r=localStorage.getItem(key); return r?JSON.parse(r):initial;}catch{return initial;} }); useEffect(()=>{ try{localStorage.setItem(key,JSON.stringify(s));}catch{} },[key,s]); return [s,ss]; }
 
-const MODES=[{id:"wyr",name:"Would You Rather",desc:"Entscheidet euch zwischen zwei Optionen."},{id:"tod",name:"Truth or Dare",desc:"Wahrheit ODER Pflicht – spicy optional."},{id:"match",name:"Match Meter",desc:"Schätzt ein, ob ihr gleich antwortet (Kompatibilität)."},{id:"cat",name:"Categories",desc:"Kategorie + Buchstabe – nennt abwechselnd Begriffe."},{id:"trivia",name:"Speed Trivia",desc:"Kurze Quizfragen zum Auflockern."}];
+/* ------ Modus + Themes ------ */
+const MODES = [
+  { id:"wyr",   name:"Would You Rather", desc:"Entscheidet euch zwischen zwei Optionen." },
+  { id:"tod",   name:"Truth or Dare",    desc:"Wahrheit ODER Pflicht – spicy optional." },
+  { id:"match", name:"Match Meter",      desc:"Schätzt ein, ob ihr gleich antwortet (Liebestest)." },
+  { id:"cat",   name:"Categories",       desc:"Kategorie + Buchstabe – nennt abwechselnd Begriffe." },
+  { id:"trivia",name:"Speed Trivia",     desc:"Kurze Quizfragen." },
+];
 
-/*********************
- * String-Ähnlichkeit (ohne KI)
- *********************/
-function normalize(s){ return (s||"").toLowerCase().normalize("NFKD").replace(/[\p{Diacritic}]/gu,"").replace(/[^a-z0-9äöüß\s]/gi,"").replace(/\s+/g," ").trim(); }
-function tokens(s){ return normalize(s).split(" ").filter(Boolean); }
-function diceCoeff(a,b){ const A=new Set(a), B=new Set(b); const inter=[...A].filter(x=>B.has(x)).length; return (2*inter)/(A.size+B.size||1); }
-function charSim(a,b){ const x=normalize(a), y=normalize(b); const maxLen=Math.max(x.length,y.length)||1; let m=0; const ychars=y.split(""); for(const ch of x){ const i=ychars.indexOf(ch); if(i>-1){ m++; ychars.splice(i,1);} } return m/maxLen; }
-function similarity(a,b){ const ta=tokens(a), tb=tokens(b); const tokenScore=diceCoeff(ta,tb); const charScore=charSim(a,b); return Math.round(Math.max(tokenScore, charScore)*100); }
+const MODE_THEME = {
+  wyr:   { from:"from-sky-500/15",    via:"via-cyan-400/10",   to:"to-sky-300/15"    },
+  tod:   { from:"from-rose-500/15",   via:"via-pink-400/10",   to:"to-red-300/15"    },
+  match: { from:"from-violet-500/15", via:"via-fuchsia-400/10",to:"to-purple-300/15" },
+  cat:   { from:"from-emerald-500/15",via:"via-teal-400/10",   to:"to-emerald-300/15"},
+  trivia:{ from:"from-amber-500/15",  via:"via-yellow-400/10", to:"to-amber-300/15"  },
+};
 
-/*********************
- * App
- *********************/
+const MODE_BUTTON_STYLES = {
+  wyr:   { bg:"bg-sky-700/70",   hover:"hover:bg-sky-700",   ring:"ring-sky-300",   shadow:"shadow-sky-500/40" },
+  tod:   { bg:"bg-rose-700/70",  hover:"hover:bg-rose-700",  ring:"ring-rose-300",  shadow:"shadow-rose-500/40" },
+  match: { bg:"bg-violet-700/70",hover:"hover:bg-violet-700",ring:"ring-violet-300",shadow:"shadow-violet-500/40" },
+  cat:   { bg:"bg-emerald-700/70",hover:"hover:bg-emerald-700",ring:"ring-emerald-300",shadow:"shadow-emerald-500/40" },
+  trivia:{ bg:"bg-amber-700/70", hover:"hover:bg-amber-700", ring:"ring-amber-300", shadow:"shadow-amber-500/40" },
+};
+
+function ModeSelector({ mode, setMode }) {
+  return (
+    <div className="space-y-3">
+      <div className="text-sm text-white/80">Spielmodus</div>
+      {MODES.map(m=>{
+        const s = MODE_BUTTON_STYLES[m.id];
+        const active = mode===m.id;
+        return (
+          <motion.button
+            key={m.id}
+            whileTap={{scale:0.98}}
+            onClick={()=>setMode(m.id)}
+            className={`w-full text-left rounded-2xl px-4 py-3 border transition transform
+                        ${s.bg} ${s.hover} border-white/10 text-white
+                        ${active ? `ring-2 ${s.ring} shadow-lg ${s.shadow}` : "opacity-95 hover:scale-[1.01]"}`}
+          >
+            <div className="font-semibold">{m.name}</div>
+            <div className="text-sm text-white/80">{m.desc}</div>
+          </motion.button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ------ App ------ */
 export default function App(){
-  const [room,setRoom]=useLocalStorage("ccg_room","Ilayda❤️Sufyan");
-  const [mode,setMode]=useLocalStorage("ccg_mode","wyr");
-  const [spice,setSpice]=useLocalStorage("ccg_spice",true);
-  const [p1,setP1]=useLocalStorage("ccg_p1",0);
-  const [p2,setP2]=useLocalStorage("ccg_p2",0);
-  const [seconds,setSeconds]=useLocalStorage("ccg_secs",60);
-  const [round,setRound]=useLocalStorage("ccg_round",1);
+  const [tab,setTab]=useState("home");
+  const [mode,setMode]=useState("wyr");
+  const [room,setRoom]=useState("1234");
+  const [seconds,setSeconds]=useState(60);
+  const [spice,setSpice]=useState(true);
+  const [myRole,setMyRole]=useState("p1");
+  const [p1,setP1]=useState(0); const [p2,setP2]=useState(0);
+  const [round,setRound]=useState(1);
 
-  // Präsenz + Realtime Broadcast
-  const clientKey=useMemo(()=>Math.random().toString(36).slice(2),[]);
+  // Presence indicator
   const [onlineCount,setOnlineCount]=useState(1);
-  const channelRef=useRef(null); const applyingRef=useRef(false);
 
-  // --- Match Meter state ---
-  const [mmPredictor,setMMPredictor]=useLocalStorage("ccg_mm_predictor","p1");
-  const [mmPercent,setMMPercent]=useLocalStorage("ccg_mm_percent",50);
-  const [mmAnsP1,setMMAnsP1]=useLocalStorage("ccg_mm_ans_p1","");
-  const [mmAnsP2,setMMAnsP2]=useLocalStorage("ccg_mm_ans_p2","");
-  const [mmResolved,setMMResolved]=useState(false);
-  const [mmScore,setMMScore]=useState(0);
+  // ToD Auswahl
+  const [todChoice,setTodChoice]=useState("truth"); // "truth" | "dare"
+
+  const WYR_POOL=useMemo(()=>[...WYR_CUTE,...(spice?WYR_SPICY:[])],[spice]);
+  const TRUTH_POOL=useMemo(()=>[...TRUTH_PROMPTS,...(spice?TRUTH_SPICY:[])],[spice]);
+  const DARE_POOL=useMemo(()=>[...DARE_PROMPTS,...(spice?DARE_SPICY:[])],[spice]);
+
+  const rng=useMemo(()=>makeRNG(`${room}:${round}:${mode}:${spice}`),[room,round,mode,spice]);
+  const pick=useMemo(()=>makePicker(`${room}:${round}:${mode}:${spice}`),[room,round,mode,spice]);
+
+  const card=useMemo(()=>{
+    if(mode==="wyr"){ return {title:"Would You Rather",lines:[pick(WYR_POOL)]}; }
+    if(mode==="tod"){ return {title:"Truth or Dare",truth:pick(TRUTH_POOL),dare:pick(DARE_POOL)}; }
+    if(mode==="match"){ return {title:"Match Meter",lines:[pick(MATCH_PROMPTS)]}; }
+    if(mode==="cat"){ return {title:"Categories",lines:[`Buchstabe: ${randomLetter(rng)}`,`Kategorie: ${pick(CATEGORIES)}`]}; }
+    if(mode==="trivia"){ const t=pick(TRIVIA); return {title:"Speed Trivia",lines:[t.q],solution:t.a}; }
+    return {title:"",lines:[]};
+  },[mode,pick,rng,WYR_POOL,TRUTH_POOL,DARE_POOL]);
+
+  // Match Meter
+  const [mmAnsP1,setMMAnsP1]=useState(""); const [mmAnsP2,setMMAnsP2]=useState("");
+  const [mmRcvP1,setMmRcvP1]=useState(""); const [mmRcvP2,setMmRcvP2]=useState("");
+  const [mmResolved,setMMResolved]=useState(false); const [mmScore,setMMScore]=useState(0);
   const [mmHearts,setMMHearts]=useState(false);
 
-  // Channel aufbauen
-  useEffect(()=>{
-    if(!room) return; if(channelRef.current){ supabase.removeChannel(channelRef.current); channelRef.current=null; }
+  const [triviaShowSolution,setTriviaShowSolution]=useState(false);
+
+  // Realtime (Presence + State)
+  const clientKey=useMemo(()=>Math.random().toString(36).slice(2),[]);
+  const channelRef=useRef(null); const applyingRef=useRef(false);
+  useEffect(()=>{ if(!room) return;
+    if(channelRef.current){ supabase.removeChannel(channelRef.current); channelRef.current=null; }
     const ch=supabase.channel(`room-${room}`,{config:{presence:{key:clientKey}}});
 
-    ch.on("presence",{event:"sync"},()=>{ const n=Object.keys(ch.presenceState()).length; setOnlineCount(n); });
+    // Presence indicator
+    ch.on("presence",{event:"sync"},()=>{
+      const n = Object.keys(ch.presenceState() || {}).length;
+      setOnlineCount(n || 1);
+    });
 
-    // Broadcast empfangen
     ch.on("broadcast",{event:"state"},(payload)=>{
-      const { sender, data } = payload.payload||{}; if(sender===clientKey) return;
+      const {sender,data}=payload.payload||{}; if(sender===clientKey) return;
       applyingRef.current=true;
       if(data.mode!==undefined) setMode(data.mode);
       if(data.round!==undefined) setRound(data.round);
-      if(data.p1!==undefined) setP1(data.p1);
-      if(data.p2!==undefined) setP2(data.p2);
-      if(data.spice!==undefined) setSpice(data.spice);
       if(data.seconds!==undefined) setSeconds(data.seconds);
-      // match meter
-      if(data.mmPredictor!==undefined) setMMPredictor(data.mmPredictor);
-      if(data.mmPercent!==undefined) setMMPercent(data.mmPercent);
-      if(data.mmAnsP1!==undefined) setMMAnsP1(data.mmAnsP1);
-      if(data.mmAnsP2!==undefined) setMMAnsP2(data.mmAnsP2);
-      if(data.mmResolved!==undefined) setMMResolved(data.mmResolved);
-      if(data.mmScore!==undefined) setMMScore(data.mmScore);
-      if(data.mmHearts!==undefined) setMMHearts(data.mmHearts);
-      setTimeout(()=>{ applyingRef.current=false; },0);
+      if(data.spice!==undefined) setSpice(data.spice);
+      if(data.todChoice!==undefined) setTodChoice(data.todChoice);
+      setTimeout(()=>{applyingRef.current=false;},0);
     });
-
-    ch.on("broadcast",{event:"request_state"},(payload)=>{
-      const { sender } = payload.payload||{}; if(sender===clientKey) return;
-      ch.send({ type:"broadcast", event:"state", payload:{ sender:clientKey, data:{ mode, round, p1, p2, spice, seconds, mmPredictor, mmPercent, mmAnsP1, mmAnsP2, mmResolved, mmScore, mmHearts } } });
+    ch.on("broadcast",{event:"mm_reveal"},(payload)=>{
+      const {sender,role,answer}=payload.payload||{}; if(sender===clientKey) return;
+      if(role==="p1") setMmRcvP1(answer||""); if(role==="p2") setMmRcvP2(answer||"");
     });
-
-    ch.subscribe(async (status)=>{
-      if(status==="SUBSCRIBED"){ await ch.track({ online_at:new Date().toISOString() });
-        ch.send({ type:"broadcast", event:"request_state", payload:{ sender:clientKey } });
-      }
-    });
-
-    channelRef.current=ch; return ()=>{ try{ supabase.removeChannel(ch); }catch{} };
+    ch.subscribe(async(status)=>{ if(status==="SUBSCRIBED"){ await ch.track({online_at:new Date().toISOString()}); }});
+    channelRef.current=ch; return()=>{try{supabase.removeChannel(ch);}catch{}};
   },[room]);
 
-  // Änderungen broadcasten
-  const broadcast = (extra={})=>{ if(applyingRef.current) return; const ch=channelRef.current; if(!ch) return; ch.send({ type:"broadcast", event:"state", payload:{ sender:clientKey, data:{ mode, round, p1, p2, spice, seconds, mmPredictor, mmPercent, mmAnsP1, mmAnsP2, mmResolved, mmScore, mmHearts, ...extra } } }); };
-  useEffect(()=>{ broadcast(); },[mode,round,p1,p2,spice,seconds,mmPredictor,mmPercent,mmAnsP1,mmAnsP2,mmResolved,mmScore,mmHearts]);
+  const broadcast=(extra={})=>{ if(applyingRef.current) return; const ch=channelRef.current; if(!ch) return;
+    ch.send({type:"broadcast",event:"state",payload:{sender:clientKey,data:{mode,round,seconds,spice,todChoice,...extra}}});
+  };
+  useEffect(()=>{ broadcast(); },[mode,round,seconds,spice,todChoice]);
 
-  // Kartenlogik
-  const rng=useMemo(()=>makeRNG(`${room}:${round}:${mode}:${spice}`),[room,round,mode,spice]);
-  const pick=useMemo(()=>makePicker(`${room}:${round}:${mode}:${spice}`),[room,round,mode,spice]);
-  const card=useMemo(()=>{
-    if(mode==="wyr"){ const pool=spice?[...WYR_CUTE,...WYR_SPICY]:WYR_CUTE; let a=pick(pool), b=pick(pool), guard=0; while(b===a&&guard++<10) b=pick(pool); return {title:"Would You Rather", lines:[a,b]}; }
-    if(mode==="tod"){ const truth=pick(TRUTH_PROMPTS), dare=pick(DARE_PROMPTS); return {title:"Truth or Dare", lines:["Truth:",truth,"Dare:",dare]}; }
-    if(mode==="match"){ const q = pick(MATCH_METER_QUESTIONS); return {title:"Match Meter", lines:[q], hint:"Beide tippen Antworten. Predictor stellt Schätzung ein und wertet aus."}; }
-    if(mode==="cat"){ return {title:"Categories", lines:[`Buchstabe: ${randomLetter(rng)}`,`Kategorie: ${pick(CATEGORIES)}`]}; }
-    if(mode==="trivia"){ const t=pick(TRIVIA); return {title:"Speed Trivia", lines:[t.q], solution:t.a}; }
-    return {title:"", lines:[]};
-  },[mode,pick,rng,spice]);
+  // Herz 3s
+  useEffect(()=>{ if(mmHearts){ const t=setTimeout(()=>setMMHearts(false),3000); return()=>clearTimeout(t);} },[mmHearts]);
 
-  const nextRound=()=>{ setRound(r=>r+1); if(mode==="match"){ setMMAnsP1(""); setMMAnsP2(""); setMMResolved(false); setMMHearts(false); broadcast({ mmAnsP1:"", mmAnsP2:"", mmResolved:false, mmHearts:false }); } };
-  const prevRound=()=>setRound(r=>Math.max(1,r-1));
+  // Match Auswertung
+  useEffect(()=>{ if(mmResolved) return; const a1=mmRcvP1||mmAnsP1; const a2=mmRcvP2||mmAnsP2; if(!a1||!a2) return;
+    const s=similarity(a1,a2); setMMScore(s); setMMHearts(s===100); setMMResolved(true);
+  },[mmRcvP1,mmRcvP2,mmAnsP1,mmAnsP2,mmResolved]);
 
-  // Hearts Animation
-  function Hearts(){ if(!mmHearts) return null; const hearts = Array.from({length:12},(_,i)=>i); return (
-    <div className="pointer-events-none fixed inset-0 flex items-center justify-center overflow-hidden">
-      {hearts.map(i=> (
-        <span key={i} className="absolute text-4xl animate-ping" style={{ left: `${Math.random()*80+10}%`, top: `${Math.random()*60+20}%` }}>❤️</span>
-      ))}
-    </div>
-  ); }
+  function resolveMatch(){ const myAnswer=myRole==="p1"?mmAnsP1:mmAnsP2; if(myRole==="p1") setMmRcvP1(myAnswer||""); else setMmRcvP2(myAnswer||"");
+    const ch=channelRef.current; if(ch){ ch.send({type:"broadcast",event:"mm_reveal",payload:{sender:clientKey,role:myRole,answer:myAnswer||""}}); } }
 
-  // Match auswerten
-  function resolveMatch(){
-    const predictorIsP1 = mmPredictor === "p1";
-    const a = predictorIsP1 ? mmAnsP2 : mmAnsP1; // Antwort der anderen Person
-    const b = predictorIsP1 ? mmAnsP1 : mmAnsP2; // Antwort des Predictors
-    const s = similarity(a,b); // 0..100
-    setMMScore(s);
-    const hearts = s >= 80; setMMHearts(hearts);
+  function nextCard(){ setRound(r=>r+1); setTriviaShowSolution(false); if(mode==="match"){ setMMAnsP1("");setMMAnsP2("");setMmRcvP1("");setMmRcvP2("");setMMResolved(false);setMMScore(0);setMMHearts(false);} }
+  function prevCard(){ setRound(r=>Math.max(1,r-1)); setTriviaShowSolution(false); }
 
-    // Punkte abhängig von Güte der Vorhersage
-    const pred = mmPercent; const diff = Math.abs(pred - s);
-    if(predictorIsP1){ if(diff<=20) setP1(v=>v+1); else if(pred>=80 && s<50) setP1(v=>Math.max(0,v-1)); }
-    else { if(diff<=20) setP2(v=>v+1); else if(pred>=80 && s<50) setP2(v=>Math.max(0,v-1)); }
-
-    setMMResolved(true);
-    broadcast({ mmScore:s, mmResolved:true, mmHearts:hearts, p1, p2 });
-  }
+  const theme = MODE_THEME[mode] || MODE_THEME.wyr;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-neutral-950 via-[#0b0f19] to-black text-white">
-      <Hearts />
-      <div className="max-w-3xl mx-auto px-4 py-6 md:py-10">
+    <div className="min-h-screen relative bg-gradient-to-b from-black via-neutral-950 to-black text-white overflow-hidden">
+      {/* dynamischer Farb-Glow */}
+      <div className={`pointer-events-none absolute inset-0 bg-gradient-to-tr ${theme.from} ${theme.via} ${theme.to} animate-pulse`} />
+
+      {/* Herzregen */}
+      <AnimatePresence>
+        {mmHearts && (
+          <motion.div key="heart" initial={{scale:0,opacity:0}} animate={{scale:3,opacity:1}} exit={{scale:0.5,opacity:0}} transition={{duration:0.8}}
+            className="absolute inset-0 flex items-center justify-center z-50">
+            <Heart size={140} className="text-pink-500 drop-shadow-[0_0_30px_rgba(236,72,153,0.7)]"/>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div
+        className="relative z-10 max-w-5xl mx-auto px-4 py-6 md:py-10 pb-32"
+        style={{ paddingBottom: "calc(7.5rem + env(safe-area-inset-bottom))" }}
+      >
         <header className="mb-6 md:mb-8 flex items-center justify-between">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-rose-400 via-pink-300 to-sky-300">Couple Call Games</h1>
-          <div className="flex items-center gap-2"><Pill>v1.8</Pill><Pill>Realtime Sync</Pill></div>
+          <h1 className="text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-rose-400 via-pink-300 to-sky-300">
+            Couple Call Games
+          </h1>
+          <Pill>v2.0</Pill>
         </header>
 
-        <Section title="Setup">
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm text-white/80 flex items-center gap-2">Gemeinsamer Room Code
-                <span className={`inline-block w-3 h-3 rounded-full ${onlineCount>=2?"bg-green-500":"bg-red-500"}`}></span>
-              </label>
-              <input className="w-full px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800 focus:outline-none focus:ring-2 focus:ring-rose-400/40" value={room} onChange={(e)=>setRoom(e.target.value)} placeholder="z. B. 1234" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm text-white/80">Spielmodus</label>
-              <div className="grid grid-cols-2 gap-2">
-                {MODES.map(m=> (
-                  <button key={m.id} onClick={()=>setMode(m.id)} className={`px-3 py-2 rounded-xl border text-left ${mode===m.id?"bg-white text-black border-white":"bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800"}`}>
-                    <div className="text-sm font-semibold">{m.name}</div>
-                    <div className="text-xs opacity-70">{m.desc}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 grid md:grid-cols-3 gap-4 items-end">
-            <div className="space-y-2">
-              <label className="text-sm text-white/80">Timer (Sekunden)</label>
-              <div className="flex gap-2 flex-wrap">
-                {[30,45,60,90].map(s=> (
-                  <button key={s} onClick={()=>{setSeconds(s);}} className={`px-3 py-2 rounded-xl border ${seconds===s?"bg-white text-black border-white":"bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800"}`}>{s}s</button>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm text-white/80">Würze</label>
-              <div className="flex items-center gap-2">
-                <button onClick={()=>setSpice(!spice)} className={`px-3 py-2 rounded-xl border ${spice?"bg-rose-600 text-white border-rose-600 hover:bg-rose-500":"bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800"}`}>{spice?"Spicy an":"Spicy aus"}</button>
-                <span className="text-xs text-white/60">Gilt für WYR / ToD</span>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm text-white/80">Runde</label>
-              <div className="flex items-center gap-2">
-                <button onClick={prevRound} className="px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800 hover:bg-neutral-800">←</button>
-                <span className="px-3 py-2 rounded-xl bg-neutral-800 border border-neutral-700 font-mono">{round}</span>
-                <button onClick={nextRound} className="px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800 hover:bg-neutral-800">→</button>
-              </div>
-            </div>
-          </div>
-        </Section>
-
-        <div className="my-6"><Timer seconds={seconds} onFinish={()=>{}}/></div>
-
-        <Section title="Aktuelle Karte">
-          <div className="space-y-3">
-            <div className="text-xl md:text-2xl font-semibold">{card.title}</div>
-
-            {/* Match Meter UI */}
-            {mode==="match" && (
-              <div className="space-y-4">
-                <div className="text-white/80 text-sm">{card.lines?.[0]}</div>
-
-                <div className="grid md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-white/70">Antwort Spieler 1</label>
-                    <input className="w-full px-3 py-2 mt-1 rounded-xl bg-neutral-900 border border-neutral-800 focus:outline-none" value={mmAnsP1} onChange={(e)=>setMMAnsP1(e.target.value)} placeholder="Antwort von P1" />
+        {/* HOME */}
+        {tab==="home" && (
+          <>
+            {/* Setup */}
+            <Section title="Home">
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* LINKS */}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm text-white/80 flex items-center gap-2">
+                      Gemeinsamer Room Code
+                      <span className={`inline-block w-3 h-3 rounded-full ${onlineCount>=2?'bg-green-500':'bg-red-500'}`} />
+                    </label>
+                    <input className="w-full px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800 focus:outline-none focus:ring-2 focus:ring-rose-400/40"
+                      value={room} onChange={e=>setRoom(e.target.value)} placeholder="z. B. 1234"/>
                   </div>
-                  <div>
-                    <label className="text-xs text-white/70">Antwort Spieler 2</label>
-                    <input className="w-full px-3 py-2 mt-1 rounded-xl bg-neutral-900 border border-neutral-800 focus:outline-none" value={mmAnsP2} onChange={(e)=>setMMAnsP2(e.target.value)} placeholder="Antwort von P2" />
+
+                  <div className="space-y-2">
+                    <label className="text-sm text-white/80">Timer (Sekunden)</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {[30,45,60,90].map(s=>(
+                        <motion.button key={s} whileTap={{scale:0.95}} onClick={()=>setSeconds(s)}
+                          className={`px-3 py-2 rounded-xl border ${seconds===s?'bg-white text-black border-white':'bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800'}`}>
+                          {s}s
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm text-white/80">Spicy Mode</label>
+                    <motion.button whileTap={{scale:0.95}} onClick={()=>setSpice(!spice)}
+                      className={`ml-3 px-3 py-2 rounded-xl border ${spice?'bg-rose-600 text-white border-rose-600 hover:bg-rose-500':'bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800'}`}>
+                      {spice?'Spicy an':'Spicy aus'}
+                    </motion.button>
+                    <div className="text-xs text-white/60">Gilt für WYR / ToD</div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm text-white/80">Rolle nur für (Match Meter)</label>
+                    <div className="flex items-center gap-2">
+                      <motion.button whileTap={{scale:0.95}} onClick={()=>setMyRole("p1")}
+                        className={`px-3 py-2 rounded-xl border flex items-center gap-2 ${myRole==="p1"?'bg-white text-black border-white ring-2 ring-pink-400':'bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800'}`}>
+                        {myRole==="p1"&&<Check size={16}/>} Ich bin Spieler 1
+                      </motion.button>
+                      <motion.button whileTap={{scale:0.95}} onClick={()=>setMyRole("p2")}
+                        className={`px-3 py-2 rounded-xl border flex items-center gap-2 ${myRole==="p2"?'bg-white text-black border-white ring-2 ring-sky-400':'bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800'}`}>
+                        {myRole==="p2"&&<Check size={16}/>} Ich bin Spieler 2
+                      </motion.button>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-white/70">Predictor:</span>
-                  <button onClick={()=>setMMPredictor("p1")} className={`px-2 py-1 rounded-lg border ${mmPredictor==="p1"?"bg-white text-black border-white":"bg-neutral-900 border-neutral-800 text-white/80"}`}>Player 1</button>
-                  <button onClick={()=>setMMPredictor("p2")} className={`px-2 py-1 rounded-lg border ${mmPredictor==="p2"?"bg-white text-black border-white":"bg-neutral-900 border-neutral-800 text-white/80"}`}>Player 2</button>
-                </div>
-
-                <div>
-                  <label className="text-sm text-white/80 flex items-center justify-between">
-                    <span>Match-Schätzung</span><span className="font-mono">{mmPercent}%</span>
-                  </label>
-                  <input type="range" min="0" max="100" value={mmPercent} onChange={(e)=>setMMPercent(parseInt(e.target.value)||0)} className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer" />
-                </div>
-
-                {!mmResolved ? (
-                  <button onClick={resolveMatch} className="px-4 py-2 rounded-xl bg-white text-black font-semibold">Auswerten</button>
-                ) : (
-                  <div className="text-sm text-white/80">Ähnlichkeit: <span className="font-mono text-white">{mmScore}%</span> {mmScore>=80 && <span className="ml-2">❤️ Match!</span>}</div>
-                )}
+                {/* RECHTS – bunte Modusliste (Listenlayout) */}
+                <ModeSelector mode={mode} setMode={setMode}/>
               </div>
-            )}
+            </Section>
 
-            {/* Standard-Ausgabe für andere Modi */}
-            {mode!=="match" && (
-              <div className="space-y-2">
-                {card.lines?.map((line,i)=> (
-                  <div key={i} className={`text-base md:text-lg ${line.endsWith(":")?"mt-2 font-semibold":""}`}>{line}</div>
-                ))}
-                {card.solution && (
-                  <details className="mt-2"><summary className="cursor-pointer text-white/80">Lösung anzeigen</summary><div className="mt-1 text-white/90">{card.solution}</div></details>
-                )}
-              </div>
-            )}
+            <div className="my-6"><Timer seconds={seconds} onFinish={()=>{}} /></div>
 
-            <div className="pt-3 flex gap-2">
-              <button onClick={prevRound} className="px-4 py-2 rounded-xl bg-neutral-900 border border-neutral-800 hover:bg-neutral-800">Zurück</button>
-              <button onClick={nextRound} className="px-4 py-2 rounded-xl bg-white text-black font-semibold">Nächste Karte</button>
-            </div>
-          </div>
-        </Section>
+            {/* Aktuelle Karte */}
+            <Section title="Aktuelle Karte">
+              <AnimatePresence mode="wait">
+                <motion.div key={`${mode}-${round}-${todChoice}`} initial={{y:30,opacity:0,scale:0.98}} animate={{y:0,opacity:1,scale:1}} exit={{y:-20,opacity:0,scale:0.98}} transition={{type:"spring",stiffness:220,damping:20}} className="text-lg">
+                  <div className="text-xl md:text-2xl font-semibold mb-3">{card.title}</div>
 
-        <div className="grid md:grid-cols-2 gap-4 mt-6">
-          <Section title="Punktestand">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 flex-wrap">
-              <Counter label="Player 1" value={p1} onChange={setP1} />
-              <Counter label="Player 2" value={p2} onChange={setP2} />
-            </div>
-            <div className="mt-3">
-              <button onClick={()=>{ setP1(0); setP2(0); }} className="px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800 hover:bg-neutral-800">Reset</button>
-            </div>
-          </Section>
+                  {mode==="wyr" && <div className="mb-4">{card.lines[0]}</div>}
 
-          <Section title="Spieltipps (für Telefonate)">
-            <ul className="list-disc list-inside space-y-1 text-white/80 text-sm">
-              <li>Denselben Room Code eingeben → gleiche Karten in gleicher Reihenfolge.</li>
-              <li>Timer ist nur Reminder – lauter Beep am Ende.</li>
-              <li>Punkte manuell zählen. Bei Gleichstand: schnelle Trivia als Tie-Break.</li>
-            </ul>
-          </Section>
-        </div>
+                  {mode==="tod" && (
+                    <div className="space-y-3">
+                      {/* Auswahl-Buttons */}
+                      <div className="flex gap-2">
+                        <motion.button
+                          whileTap={{scale:0.95}}
+                          onClick={()=>setTodChoice("truth")}
+                          className={`px-3 py-2 rounded-xl border ${todChoice==="truth" ? "bg-white text-black border-white" : "bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800"}`}
+                        >
+                          Wahrheit
+                        </motion.button>
+                        <motion.button
+                          whileTap={{scale:0.95}}
+                          onClick={()=>setTodChoice("dare")}
+                          className={`px-3 py-2 rounded-xl border ${todChoice==="dare" ? "bg-white text-black border-white" : "bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800"}`}
+                        >
+                          Pflicht
+                        </motion.button>
+                      </div>
 
-        {/* Debug / Test-Fälle */}
-        <details className="mt-6 opacity-80">
-          <summary className="cursor-pointer">Debug anzeigen (State & Sync)</summary>
-          <pre className="mt-2 text-xs bg-neutral-900/80 p-3 rounded-xl border border-neutral-800 overflow-auto">
-{JSON.stringify({ room, mode, round, p1, p2, spice, seconds, onlineCount, mmPredictor, mmPercent, mmAnsP1, mmAnsP2, mmResolved, mmScore, mmHearts }, null, 2)}
-          </pre>
-        </details>
+                      {/* Nur die gewählte Aufgabe anzeigen */}
+                      <div className="text-base md:text-lg">
+                        {todChoice==="truth" ? (
+                          <div><strong>Wahrheit:</strong> {card.truth}</div>
+                        ) : (
+                          <div><strong>Pflicht:</strong> {card.dare}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
-        <footer className="mt-10 text-center text-xs text-white/50">Made for Sufyan & Ilayda • Alles lokal, keine Daten gespeichert.</footer>
+                  {mode==="match" && (
+                    <div className="space-y-4">
+                      <div className="text-white/80 text-sm">{card.lines?.[0]}</div>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-white/70">Antwort Spieler 1</label>
+                          <input className="w-full px-3 py-2 mt-1 rounded-xl bg-neutral-900 border border-neutral-800"
+                            value={mmAnsP1} onChange={e=>setMMAnsP1(e.target.value)} disabled={myRole!=="p1"} placeholder="Antwort von P1"/>
+                        </div>
+                        <div>
+                          <label className="text-xs text-white/70">Antwort Spieler 2</label>
+                          <input className="w-full px-3 py-2 mt-1 rounded-xl bg-neutral-900 border border-neutral-800"
+                            value={mmAnsP2} onChange={e=>setMMAnsP2(e.target.value)} disabled={myRole!=="p2"} placeholder="Antwort von P2"/>
+                        </div>
+                      </div>
+                      {!mmResolved ? (
+                        <motion.button whileTap={{scale:0.95}} onClick={resolveMatch} className="px-4 py-2 rounded-xl bg-white text-black font-semibold">
+                          Reveal & Auswerten
+                        </motion.button>
+                      ) : (
+                        <div className="text-sm text-white/80">
+                          Ähnlichkeit: <span className="font-mono text-white">{mmScore}%</span>
+                          {mmScore===100 && <span className="ml-2">❤️ Perfektes Match!</span>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {mode==="cat" && (<div className="space-y-2">{card.lines?.map((ln,i)=>(<div key={i}>{ln}</div>))}</div>)}
+
+                  {mode==="trivia" && (
+                    <div>
+                      <div className="mb-2">{card.lines[0]}</div>
+                      <details className="mt-1">
+                        <summary className="cursor-pointer text-white/80">Lösung anzeigen</summary>
+                        <div className="mt-1 text-white/90">{card.solution}</div>
+                      </details>
+                    </div>
+                  )}
+
+                  {/* Navigation */}
+                  <div className="mt-6 flex gap-3">
+                    <motion.button whileTap={{scale:0.95}} onClick={prevCard} className="px-4 py-2 rounded-lg bg-neutral-900 border border-neutral-800">Zurück</motion.button>
+                    <motion.button whileTap={{scale:0.95}} onClick={nextCard} className="px-4 py-2 rounded-lg bg-white text-black">Nächste Karte</motion.button>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+            </Section>
+          </>
+        )}
+
+        {/* Favoriten/Settings – Coming soon */}
+        {tab==="fav" && (<Section title="Favoriten"><p className="text-sm text-white/70">Coming soon ✨</p></Section>)}
+        {tab==="settings" && (<Section title="Einstellungen"><p className="text-sm text-white/70">Coming soon ✨</p></Section>)}
       </div>
+
+      <BottomNav tab={tab} setTab={setTab}/>
     </div>
   );
 }
