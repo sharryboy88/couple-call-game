@@ -1,14 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, Home, Settings, Star, Check } from "lucide-react";
+import { Heart, Home, Settings, Star, Check, Trash2, Plus } from "lucide-react";
 
 /****************************************************
- * Couple Call Games – WOW-Design + bunte Modus-Buttons (Listenlayout)
- * - Präsenz-Indikator (rot/grün) neben Room Code
- * - Spicy-Button mit leichtem Abstand
- * - Bottom-Nav: Home, Favoriten, Einstellungen
- * - ToD: Auswahl-Buttons für Wahrheit / Pflicht + Realtime-Sync
+ * Couple Call Games – 3.1
+ * ✅ Fixes:
+ *  - ToD zeigt erst Inhalte nach Auswahl
+ *  - Match Meter Reveal & Auswerten + Herzanimation
+ *  - Realtime Broadcast (State/ToD/Match)
+ * 🆕 Features:
+ *  - No Duplicates (Session History pro Room/Modus)
+ *  - Settings → Karten hinzufügen (mit localStorage + Realtime-Sync)
  ****************************************************/
 
 const SUPABASE_URL = "https://qelpirfwoycjfcgvajud.supabase.co";
@@ -41,80 +44,111 @@ function makeRNG(seedStr){let x=hashStringToSeed(seedStr);return function(){x^=x
 function makePicker(seedStr){const r=makeRNG(seedStr);return arr=>!arr?.length?"" : arr[Math.floor(r()*arr.length)];}
 function randomLetter(rng){const L="ABCDEFGHIJKLMNOPQRSTUVWXYZ";return L[Math.floor(rng()*L.length)];}
 
-/* ------ Kartenpools ------ */
+/* ------ Kartenpools (Platzhalter) ------ */
 const WYR_CUTE = [
-  "Würdest du eher die Welt bereisen oder dein Traumhaus bauen?",
-  "Würdest du eher gemeinsam ein Unternehmen gründen oder für eine Firma arbeiten?",
-  "Würdest du eher früh in den Ruhestand gehen oder später im Leben weiterarbeiten?",
-  "Würdest du eher eine große oder eine kleine Familie haben?",
-  "Würdest du eher für immer in deiner Heimatstadt leben oder umziehen?",
-  "Hättest du eher ein vorhersehbares Leben oder eines voller Überraschungen?",
-  "Würdest du eher deinem Traumjob nachgehen oder finanzielle Sicherheit haben?",
-  "Würdest du eher ein geschäftiges Stadtleben oder ein friedliches Landleben führen?",
-  "Würdest du eher persönlichen Erfolg haben oder einen Beitrag zur Gesellschaft leisten?",
-  "Würdest du eher auf eine abenteuerliche Reise gehen oder einen entspannten Urlaub machen?",
-  "Würdest du eher gemeinsam eine neue Sprache oder eine neue Fähigkeit lernen?",
-  "Würdest du eher für die Zukunft planen oder im Moment leben?",
-  "Würdest du eher ein einfaches Leben führen oder ein Leben voller Luxus?",
-  "Würdest du dich eher weiterbilden oder dich auf deine Karriere konzentrieren?",
-  "Würdest du eher gemeinsam ehrenamtlich arbeiten oder ein gemeinsames Unternehmen gründen?",
-  "Würdest du eher gemeinsam ein Buch schreiben oder einen Blog starten?",
-  "Hättest du eher viele Bekannte oder ein paar enge Freunde?",
-  "Würdest du eher berühmt sein oder anonym bleiben?",
-  "Würdest du eher am Meer oder in den Bergen leben?",
-  "Würdest du lieber immer in Zeitlupe sprechen oder wie ein Roboter?",
-  "Würdest du lieber nie wieder Schokolade essen oder nie wieder Pizza?",
-  "Würdest du lieber für den Rest deines Lebens in einem Cartoon leben oder in einem Musical?",
-  "Würdest du eher immer rückwärts laufen müssen oder auf einem Bein hüpfen?",
-  "Würdest du lieber jeden Tag denselben Witz hören oder immer denselben Film sehen?",
-  "Würdest du eher immer einen Hut tragen müssen oder immer eine Sonnenbrille?",
-  "Würdest du lieber mit einer Comic-Stimme sprechen oder ständig in Reimen reden?",
-  "Würdest du eher 100 winzige Hunde oder einen riesigen Hund als Haustier haben?",
-  "Würdest du lieber immer niesen oder immer Schluckauf haben?",
-  "Würdest du eher die Fähigkeit verlieren, zu lachen oder zu singen?",
-  "Würdest du lieber alles, was du denkst, laut aussprechen oder nie wieder sprechen können?",
-  "Würdest du eher jedes Mal, wenn du jemandem die Hand gibst, zwinkern oder jedes Mal, wenn du jemandem hallo sagst, tanzen müssen?",
-  "Würdest du lieber für den Rest deines Lebens in einem Clownskostüm stecken oder in einem Astronautenanzug?",
-  "Würdest du eher einen Elefanten als Haustier haben oder einen Tiger?",
-  "Würdest du lieber immer Pech in Glücksspielen oder immer Pech in der Liebe haben?",
-  "Würdest du eher nie wieder die Haare schneiden können oder nie wieder deine Nägel?",
-  "Würdest du lieber jeden Morgen mit einem Kuss von einem Lama geweckt werden oder von einer Gans?",
-  "Würdest du eher in einer Welt ohne Musik oder in einer Welt ohne Filme leben?",
-  "Würdest du lieber jedes Mal, wenn du lachst, weinen müssen oder jedes Mal, wenn du weinst, lachen?",
-  "Würdest du lieber in einem Zoo arbeiten oder in einem Vergnügungspark?",
-  "Würdest du eher in einem U-Boot leben oder in einem Heißluftballon?",
-  "Würdest du lieber immer im Regen stehen oder immer in der Sonne brutzeln?",
-  "Würdest du eher für den Rest deines Lebens nur noch Eis essen oder nur noch Chips?",
-  "Würdest du lieber mit einem Papagei sprechen können oder mit einem Delfin?",
-  "Würdest du eher ein Ohr oder eine Hand verlieren?",
-  "Würdest du lieber ein Vampir oder ein Werwolf sein?",
-  "Würdest du eher nie wieder ein Handy benutzen oder nie wieder Schuhe tragen?",
-  "Würdest du lieber ständig einen Pickel auf der Stirn haben oder ständig ein Jucken am Rücken?",
-  "Würdest du eher eine Woche lang nicht sprechen können oder eine Woche lang nicht hören können?",
-  "Würdest du lieber in einem Schloss oder in einer Raumstation leben?",
-  "Würdest du eher für den Rest deines Lebens nur noch flüstern oder nur noch schreien können?",
-  "Würdest du lieber ständig dein Lieblingsessen riechen, es aber nie wieder essen dürfen oder es essen, aber nie mehr riechen?",
-  "Würdest du lieber nie wieder in den Spiegel schauen können oder immer nur durch eine trübe Scheibe?",
-  "Würdest du eher die Fähigkeit verlieren wollen, Auto zu fahren, oder die Fähigkeit, zu schwimmen?",
-  "Würdest du lieber immer nach Knoblauch riechen oder immer nach Fisch?",
-  "Würdest du eher in einem Freizeitpark oder einem Wasserpark arbeiten?",
-  "Würdest du lieber die Zeit anhalten oder zurückspulen können?",
-  "Würdest du eher alles schwarz-weiß sehen oder nur in Neonfarben?",
-  "Würdest du lieber nur noch ein Mal deine Lieblingssüßigkeit essen können oder so viele Süßigkeiten wie du willst, außer deine Lieblingssüßigkeit?",
-  "Würdest du lieber für den Rest deines Lebens in einem Zirkus oder auf einem Schiff leben?",
-  "Würdest du lieber im Körper einer Katze oder eines Hundes wiedergeboren werden?",
-  "Würdest du eher jedes Mal, wenn du sprichst, singen müssen oder tanzen, wenn du gehst?",
-  "Würdest du lieber immer nasse Socken tragen oder immer nasse Haare haben?",
-  "Würdest du lieber alle deine Zähne verlieren oder all deine Haare?",
-  "Würdest du eher dein ganzes Leben auf einem Kamel reiten oder auf einem Esel?",
-  "Würdest du lieber einen Tag als unsichtbare Person verbringen oder als Superheld?",
-  "Würdest du lieber fliegen können oder durch die Zeit reisen?",
-  "Würdest du lieber ein:e berühmte:r Sänger:in oder Schauspieler:in sein?",
-  "Würdest du eher nie wieder lachen können oder nie wieder weinen?",
-  "Würdest du lieber nur noch mit einem Piratenschiff reisen oder mit einem Raumschiff?",
-
+  "Würdest du eher ein gemeinsames Tagebuch schreiben oder ein gemeinsames Fotoalbum füllen?",
+  "Würdest du eher eine Playlist erstellen, die uns beide beschreibt, oder einen Song zusammen schreiben?",
+  "Würdest du eher in einer fremden Stadt verloren gehen oder in einer bekannten Stadt einen geheimen Ort entdecken?",
+  "Würdest du eher eine Woche lang auf dem Balkon zelten oder im Wohnzimmer ein Kissenlager bauen?",
+  "Würdest du eher einmal im Monat einen Überraschungstag planen oder einmal im Jahr eine riesige Überraschung?",
+  "Würdest du eher einen eigenen kleinen Garten haben oder einen eigenen kleinen Buchladen?",
+  "Würdest du eher ein Sternbild nach dir benannt bekommen oder eine Blume?",
+  "Würdest du eher eine Sprache erfinden oder ein Brettspiel?",
+  "Würdest du eher einen Brief an dein zukünftiges Ich schreiben oder an dein früheres Ich?",
+  "Würdest du eher einen Regentag mit Spielen verbringen oder einen Sonnentag mit Wandern?",
+  "Würdest du eher jedes Jahr einen neuen Geburtstagstrend erfinden oder jedes Jahr ein neues Ritual zu Silvester?",
+  "Würdest du eher ein altes, vergessenes Talent wiederentdecken oder ein völlig neues bekommen?",
+  "Würdest du eher ein geheimnisvolles Schloss besuchen oder eine verlassene Insel?",
+  "Würdest du eher jede Woche einen kleinen Traum erfüllen oder einmal im Jahr einen großen?",
+  "Würdest du eher nur noch über Briefe kommunizieren oder nur noch über kleine Geschenke?",
+  "Würdest du eher eine neue Märchenfigur erfinden oder in einem Märchen mitspielen?",
+  "Würdest du eher eine Woche ohne Spiegel leben oder eine Woche ohne Fotos?",
+  "Würdest du eher dein Lieblingslied nie wieder hören oder nur noch Coverversionen davon?",
+  "Würdest du eher jeden Morgen ein Kompliment bekommen oder jeden Abend?",
+  "Würdest du eher dein Leben lang kostenlose Bücher bekommen oder kostenlose Blumen?",
+  "Würdest du eher ein Haustier haben, das sprechen kann, oder eines, das Gedanken lesen kann?",
+  "Würdest du eher jeden Traum aufschreiben oder nie wieder Albträume haben?",
+  "Würdest du eher mit mir ein Geheimversteck bauen oder eine Geheimsprache entwickeln?",
+  "Würdest du eher alle Sprachen sprechen können oder jede Melodie perfekt summen?",
+  "Würdest du eher eine Nacht unter Sternen schlafen oder in einer Glaskuppel mit Blick in den Himmel?",
+  "Würdest du eher eine Postkarte von jedem Ort sammeln oder ein Steinchen?",
+  "Würdest du eher jedes Mal einen anderen Traum träumen oder immer denselben schönen?",
+  "Würdest du eher immer wissen, wann jemand an dich denkt, oder immer wissen, wann jemand dich vermisst?",
+  "Würdest du eher ein gemeinsames Tattoo haben oder ein gemeinsames Geheimnis?",
+  "Würdest du eher jeden Monat ein neues Hobby ausprobieren oder eins für immer perfektionieren?",
+  "Würdest du eher eine Geschichte hören, die niemand sonst kennt, oder ein Lied, das nie veröffentlicht wurde?",
+  "Würdest du eher für eine Woche in der Zukunft leben oder für eine Woche in einer Fantasiewelt?",
+  "Würdest du eher einen Tag in deinem Lieblingsbuch verbringen oder in deinem Lieblingsfilm?",
+  "Würdest du eher immer die Wahrheit träumen oder immer etwas Absurdes?",
+  "Würdest du eher alle Sprachen der Tiere verstehen oder alle Instrumente spielen können?",
+  "Würdest du eher einen Kuss im Regen oder eine Umarmung im Schnee?",
+  "Würdest du eher die ganze Nacht reden oder die ganze Nacht schweigend kuscheln?",
+  "Würdest du eher unsere Zukunft sehen oder unsere Vergangenheit nochmal erleben?",
+  "Würdest du eher eine eigene Farbe im Regenbogen oder eine eigene Note in der Musik haben?",
+  "Würdest du eher deine Erinnerungen auf Fotos oder in Geschichten festhalten?",
+  "Würdest du eher ein Abenteuer im eigenen Viertel erleben oder eine Reise ohne Gepäck?",
+  "Würdest du eher eine Playlist ohne Stopp hören oder ein Buch ohne Pause lesen?",
+  "Würdest du eher immer deinen Lieblingsgeruch riechen oder nie wieder etwas Unangenehmes?",
+  "Würdest du eher alles um dich herum in Sepia sehen oder alles wie in einem Disneyfilm?",
+  "Würdest du eher einen Schlüssel zu jedem Schloss haben oder eine Tür zu jedem Traum?",
+  "Würdest du eher jeden Tag einen Glückskeks öffnen oder jeden Tag ein Horoskop lesen?",
+  "Würdest du eher ein Jahr nur flüstern oder ein Jahr nur singen?",
+  "Würdest du eher nur noch tanzen können statt gehen oder nur noch lachen statt reden?",
+  "Würdest du eher für einen Tag unsichtbar sein oder für einen Tag doppelt existieren?",
+  "Würdest du eher in jedem Traum fliegen oder in jedem Traum tauchen?",
+  "Würdest du eher einen Tag komplett ohne Technik oder komplett ohne Uhr verbringen?"
 ];
 const WYR_SPICY = [
+"Würdest du eher Sex im Auto oder im Fahrstuhl haben?",
+  "Würdest du eher beim Sex erwischt werden oder jemanden erwischen?",
+  "Würdest du eher nie wieder Oralsex bekommen oder nie wieder geben?",
+  "Würdest du eher Sex im Dunkeln oder bei vollem Licht haben?",
+  "Würdest du eher ein erotisches Video von uns aufnehmen oder erotische Fotos machen?",
+  "Würdest du eher Sex im Meer oder im Pool haben?",
+  "Würdest du eher beim Sex laut sein oder total leise?",
+  "Würdest du eher Sex an einem gefährlichen Ort riskieren oder nur langweilig zu Hause?",
+  "Würdest du eher auf Vorspiel verzichten oder auf Nachspiel?",
+  "Würdest du eher nur noch schnellen Sex haben oder nur noch langen?",
+  "Würdest du eher Sex mit verbundenen Augen oder mit Handschellen?",
+  "Würdest du eher beim Küssen gebissen werden oder beim Sex gekratzt werden?",
+  "Würdest du eher in Unterwäsche gesehen werden oder nackt?",
+  "Würdest du eher eine Nacht durchküssen oder die ganze Nacht Sex haben?",
+  "Würdest du eher ein Rollenspiel ausprobieren oder Sex an einem neuen Ort?",
+  "Würdest du eher Sex draußen im Regen oder drinnen vorm Kamin haben?",
+  "Würdest du eher deine Fantasien teilen oder meine Fantasien ausprobieren?",
+  "Würdest du eher dreckige Nachrichten schreiben oder ein Nacktbild schicken?",
+  "Würdest du eher nie wieder küssen oder nie wieder Sex haben?",
+  "Würdest du eher beim Sex Musik hören oder komplette Stille?",
+  "Würdest du eher Sex mit Essen (z. B. Sahne, Erdbeeren) oder mit Toys haben?",
+  "Würdest du eher immer dominant sein oder immer submissiv?",
+  "Würdest du eher einen Quickie im Bad oder langen Sex im Bett?",
+  "Würdest du eher beim Telefonsex erwischt werden oder beim Sexting?",
+  "Würdest du eher Sex im Kino oder im Park haben?",
+  "Würdest du eher Sex ohne Küssen oder Küssen ohne Sex?",
+  "Würdest du eher beim Strippen für mich tanzen oder mich strippen lassen?",
+  "Würdest du eher ein Wochenende ohne Klamotten oder ein Wochenende ohne Handy verbringen?",
+  "Würdest du eher einen Kuss mit Zunge oder 10 ohne?",
+  "Würdest du eher Sex auf einer Party riskieren oder bei meinen Eltern zu Hause?",
+  "Würdest du eher Sex mit Spiegeln drumherum oder komplett im Dunkeln?",
+  "Würdest du eher eine erotische Massage geben oder bekommen?",
+  "Würdest du eher Sex mit Handschellen oder mit Augenbinde?",
+  "Würdest du eher eine Woche ohne Sex oder eine Woche ohne Küssen?",
+  "Würdest du eher ein geheimes Sexvideo besitzen oder ein geheimes Tagebuch?",
+  "Würdest du eher Dirty Talk im Ohr oder heiße Blicke?",
+  "Würdest du eher Sex im Flugzeug oder auf einem Boot?",
+  "Würdest du eher Sex mit Verkleidung (Kostüm) oder nackt und pur?",
+  "Würdest du eher beim Sex gefilmt werden oder jemanden filmen?",
+  "Würdest du eher Sex auf dem Küchentisch oder auf der Waschmaschine?",
+  "Würdest du eher einen Dreier ausprobieren oder niemals?",
+  "Würdest du eher nie wieder Selbstbefriedigung oder nie wieder Pornos?",
+  "Würdest du eher Sex mit Kerzenlicht oder Neonlicht?",
+  "Würdest du eher nackt baden gehen oder nackt schlafen?",
+  "Würdest du eher ein Jahr ohne Pornos oder ein Jahr ohne Küssen?",
+  "Würdest du eher meine Unterwäsche tragen oder ich deine?",
+  "Würdest du eher beim Sex laut den Nachbarn stören oder peinlich still sein?",
+  "Würdest du eher deine Lieblingsstellung für immer verlieren oder nie wieder eine neue ausprobieren dürfen?",
+  "Würdest du eher Sex im Zelt beim Camping oder im Luxushotel haben?",
+  "Würdest du eher Sex mit vollem Risiko erwischt zu werden oder 100 % sicher im Schlafzimmer?", 
   "Würdest du lieber jedes Mal ,wenn du Sex hast lachen müssen oder weinen?",
   "Würdest du eher nie wieder Küssen oder nie wieder Kuscheln?",
   "Würdest du lieber deine geheimsten Fantasien verraten oder die deines/deiner Partner:in erfahren?",
@@ -222,530 +256,399 @@ const WYR_SPICY = [
   "Würdest du lieber jemanden im Regen küssen oder mit ihm/ihr am Strand kuscheln?",
   "Würdest du eher essbare Körperfarbe oder Massageöle verwenden?",
   "Würdest du lieber ein versautes Rollenspiel machen oder gemeinsam einen heißen Film anschauen?",
-  "Würdest du lieber bei einem Dreier dabei sein oder Sex in der Öffentlichkeit haben?",
-  "Extreme \"Würdest du eher\"-Fragen – ü18!"
+  "Würdest du lieber bei einem Dreier dabei sein oder Sex in der Öffentlichkeit haben?"
 ];
 const TRUTH_PROMPTS = [
-  "Was ist eine kleine Sache, die dich sofort glücklich macht – und warum?",
-  "Wann hast du dich zuletzt von mir richtig verstanden gefühlt?",
-  "Welche Eigenschaft an mir liebst du im Alltag am meisten?",
-  "Welche Grenze ist dir in Beziehungen besonders wichtig?",
-  "Was möchtest du dieses Jahr unbedingt mit mir erleben?",
-  "Wovor hast du aktuell Respekt – und was hilft dir dagegen?",
-  "Welches Kompliment von mir wirkt lange nach?",
-  "Welche Erinnerung an uns bringt dich sofort zum Lächeln?",
-  "Welche Angewohnheit von mir findest du heimlich süß?",
-  "Wann fühlst du dich mir am nächsten?",
-  "Welche Tradition sollten wir beginnen?",
-  "Was möchtest du an dir stärken, und wie kann ich helfen?",
-  "Welche Liebessprache spricht dich am meisten an?",
-  "Wann warst du zuletzt eifersüchtig – und warum?",
-  "Welche Überraschung würdest du dir heimlich wünschen?",
-  "Was möchtest du, dass ich über dich besser verstehe?",
-  "Welche schwierige Situation haben wir gut gemeistert?",
-  "Was brauchst du, um dich emotional sicher zu fühlen?",
-  "Welche Art von Dates magst du am liebsten?",
-  "Welche Frage hast du dich nie getraut zu stellen?",
-  "Welche kleine Geste von mir bedeutet dir mehr als Worte?",
-  "Was motiviert dich an schwierigen Tagen?",
-  "Welche Macke an dir magst du heimlich gern?",
-  "Welche Musik erinnert dich an uns?",
-  "Welchen Traum willst du mit mir teilen?",
-  "Welche Veränderung in unserem Alltag wäre hilfreich?",
-  "Welche Grenze möchtest du klarer kommunizieren?",
-  "Wann fühlst du dich wertgeschätzt?",
-  "Was bedeutet „Zuhause“ mit mir für dich?",
-  "Welche Unsicherheit möchtest du mit mir besprechen?",
-  "Welche Zukunftsvision hast du für uns?",
-  "Was möchtest du mir öfter sagen?",
-  "Welche Sache willst du mir schon lange beichten (harmlos)?",
-  "Welche Nachricht von mir macht deinen Tag besser?",
-  "Welche Art Humor verbindet uns am meisten?",
-  "Welche Erinnerung willst du nie vergessen?",
-  "Was habe ich kürzlich getan, das dir guttat?",
-  "Welche Angewohnheit würdest du gern ablegen?",
-  "Was willst du, dass ich heute über dich weiß?",
-  "Welche Grenze hat dir früher geholfen?",
-  "Welche Kindheitserinnerung erzählst du gern?",
-  "Was stresst dich an Social Media?",
-  "Welche Routine hilft dir, runterzukommen?",
-  "Welche Überraschung würdest du mir in 3 Monaten machen?",
-  "Was würdest du deinem jüngeren Ich raten?",
-  "Welche Frage soll ich dir öfter stellen?",
-  "Welche Art von Nähe gibt dir Energie?",
-  "Was möchtest du als Nächstes lernen?",
-  "Welche Gewohnheit von mir verstehst du noch nicht?",
-  "Welche Erinnerung willst du mit mir neu schreiben?",
-  "Welche Farbe beschreibt deine Stimmung heute?",
-  "Was denkst du, missverstehen Menschen oft an dir?",
-  "Worauf bist du gerade stolz?",
-  "Welche Grenze ziehst du gegenüber Arbeit/Privatleben?",
-  "Welche Eigenschaft von mir möchtest du übernehmen?",
-  "Welche Serie/Film hat dich zuletzt bewegt – warum?",
-  "Was ist ein perfekter Sonntag für dich?",
-  "Welcher Ort erinnert dich an uns?",
-  "Welche Frage sollte ich dir in 1 Jahr noch einmal stellen?",
-  "Was hast du heute über dich gelernt?",
-  "Womit kann ich dich sofort aufmuntern?",
-  "Welche drei Dinge liebst du an uns?",
-  "Welche kleine Angst möchtest du loslassen?",
-  "Welche Art Komplimente fallen dir schwer?",
-  "Welches Lied passt zu unserer Geschichte?",
-  "Welche Grenzen sollen wir im Spicy-Modus setzen?",
-  "Welche Überraschungsidee hast du für unser nächstes Date?",
-  "Was motiviert dich morgens aufzustehen?",
-  "Welche Rolle spielt Humor in unserer Beziehung?",
-  "Welche Art von Nachrichten magst du von mir am liebsten?",
-  "Welche gemeinsame Gewohnheit sollten wir starten?",
-  "Welche Lektion hast du aus früheren Beziehungen mitgenommen?",
-  "Welche Dinge lassen dich geborgen fühlen?",
-  "Welche Frage möchtest du mir heute stellen?",
-  "Welche Entscheidung fiel dir zuletzt schwer?",
-  "Was möchtest du, dass wir öfter feiern?",
-  "Welche Erinnerung an unsere Anfänge ist dir wichtig?",
-  "Welche Routine abends tut dir gut?",
-  "Was möchtest du, dass ich niemals vergesse?",
-  "Welche Gewohnheit von mir nervt dich manchmal (ehrlich)?",
-  "Welche Reise möchtest du mit mir wiederholen?",
-  "Welche Grenzen willst du neu setzen?",
-  "Welche Botschaft würdest du mir als Notiz hinterlassen?",
-  "Welche Überraschung von mir hat dich überwältigt?",
-  "Welche Art von Unterstützung wünschst du dir mehr?",
-  "Welche Sache traust du dich nur bei mir?",
-  "Welche Angewohnheit an dir möchtest du feiern?",
-  "Welche Geschichte über uns erzählst du Freunden?",
-  "Welche Frage macht dich nervös – und warum?",
-  "Was willst du, dass ich heute unbedingt höre?",
-  "Welche drei Worte beschreiben mich?",
-  "Welche Qualität macht uns zu einem guten Team?",
-  "Welche Aktivität verbindet uns sofort?",
-  "Was möchtest du mir beibringen?",
-  "Was möchtest du von mir lernen?",
-  "Welche Art von Nähe fehlt dir manchmal?",
-  "Welche Grenzen willst du respektiert wissen?",
-  "Welche Erinnerung willst du neu schaffen?",
-  "Welche Zukunftsangst willst du teilen?",
-  "Welche Überraschung wäre klein, aber perfekt?"
+  "Wann hast du zuletzt etwas gemacht, das dich selbst überrascht hat?",
+  "Welche Erinnerung aus deiner Kindheit zaubert dir immer noch ein Lächeln ins Gesicht?",
+  "Welcher Mensch hat dich bisher am meisten geprägt – und warum?",
+  "Wenn du eine Angst von dir für immer loswerden könntest, welche wäre es?",
+  "Welche kleine Geste von jemandem hat dich unerwartet glücklich gemacht?",
+  "Wann hast du dich das letzte Mal richtig verletzlich gezeigt?",
+  "Was glaubst du, ist deine größte Stärke in einer Freundschaft oder Beziehung?",
+  "Worauf bist du im Alltag heimlich stolz, auch wenn es niemand bemerkt?",
+  "Welche Eigenschaft an anderen bewunderst du, die du selbst gerne mehr hättest?",
+  "Wann hast du das letzte Mal etwas zum allerersten Mal ausprobiert?",
+  "Welche Erfahrung würdest du gerne noch einmal durchleben – einfach weil sie so schön war?",
+  "Hast du dir schon einmal gewünscht, anders zu sein? Wenn ja, wie?",
+  "Was ist das mutigste, das du jemals getan hast?",
+  "Gibt es etwas, das du nie laut ausgesprochen hast, aber gerne würdest?",
+  "Welche kleine Macke an dir findest du insgeheim sympathisch?",
+  "Was ist eine Sache, die dich sofort nostalgisch werden lässt?",
+  "Wann warst du das letzte Mal so richtig stolz auf dich?",
+  "Welche Lebensentscheidung würdest du rückgängig machen, wenn du könntest?",
+  "Was war die schönste Überraschung, die dir jemand bereitet hat?",
+  "Welche deiner Eigenschaften verstehen die wenigsten Menschen?",
+  "Wann hast du dich das letzte Mal so richtig lebendig gefühlt?",
+  "Welche Sache würdest du deinem jüngeren Ich gerne sagen?",
+  "Wann hast du das letzte Mal vor Freude geweint?",
+  "Welche drei Dinge sind dir im Leben am allerwichtigsten?",
+  "Welche Eigenschaft würdest du an mir sofort übernehmen, wenn du könntest?",
+  "Was war die schwerste Entscheidung deines Lebens bisher?",
+  "Gibt es eine Person, die du gerne noch einmal treffen würdest – und warum?",
+  "Welche Art von Kompliment bedeutet dir am meisten?",
+  "Wann warst du das letzte Mal nervös und warum?",
+  "Welche Gewohnheit von dir würdest du gerne ändern?",
+  "Was ist etwas, das du dir insgeheim von der Zukunft wünschst?",
+  "Welche Erinnerung möchtest du niemals vergessen?",
+  "Was war das Verrückteste, was du jemals gemacht hast?",
+  "Welcher Traum begleitet dich schon seit Jahren?",
+  "Wenn du eine Frage über dein Leben beantwortet bekommen könntest – welche wäre es?",
+  "Welche Sache machst du immer, auch wenn es eigentlich niemand merkt?",
+  "Was war die größte Lektion, die du bisher gelernt hast?",
+  "Welcher kleine Moment hat dir in letzter Zeit Kraft gegeben?",
+  "Was denkst du, würde ich über dich sagen, wenn man mich fragen würde?",
+  "Welcher Mensch hat dich in letzter Zeit positiv überrascht?",
+  "Wenn du ein Jahr wiederholen könntest, welches würdest du nehmen?",
+  "Was ist das Schönste, das du jemals über dich selbst gehört hast?",
+  "Wann war dir das letzte Mal etwas richtig peinlich?",
+  "Welche Angewohnheit von dir bringt andere zum Lächeln?",
+  "Welche Frage würdest du dir selbst niemals stellen wollen?",
+  "Was ist das Schwerste, das du je verziehen hast?",
+  "Womit könntest du mich sofort aufmuntern?",
+  "Welche Sache traust du dich nur bei Menschen, denen du vertraust?",
+  "Was ist eine kleine Tradition oder Routine, die dir wichtig ist?",
+  "Wann hast du dich das letzte Mal so richtig frei gefühlt?"
 ];
 const DARE_PROMPTS = [
-  "Schicke mir jetzt eine 10‑Sekunden‑Sprachnachricht mit drei Komplimenten.",
-  "Zeig 15 Sekunden deinen besten Tanzmove.",
-  "Schreibe mir einen Zweizeiler über uns – jetzt laut vorlesen.",
-  "Imitiere 20 Sekunden lang eine bekannte Person.",
-  "Mach eine Selfie‑Grimasse und schick sie.",
-  "Sprich 20 Sekunden nur in Reimen.",
-  "Lies mir eine zufällige Schlagzeile vor und tu sehr dramatisch.",
-  "Baue ein Herz aus Gegenständen auf deinem Tisch und zeig es.",
-  "Sende drei Emojis, die deinen Tag perfekt beschreiben.",
-  "Tu so, als würdest du mir einen Preis verleihen – 15 Sekunden.",
-  "Sprich 15 Sekunden in Zeitlupe.",
-  "Mach 10 Hampelmänner und zähle mit.",
-  "Erfinde einen Handschlag, den wir beim nächsten Treffen testen.",
-  "Sag das Alphabet rückwärts – so weit du kommst.",
-  "Erfinde einen Werbeslogan für uns zwei.",
-  "Stell eine Filmszene nach, ich muss den Film raten.",
-  "Mach 10 Sekunden ASMR und flüstere meinen Namen.",
-  "Baue einen Turm aus 5 Dingen in deiner Nähe.",
-  "Zeig deine beste Tierimitation.",
-  "Sende ein GIF/Sticker, das deine Stimmung zeigt (wenn möglich).",
-  "Erfinde eine 5‑Sekunden‑Choreo und tanze sie.",
-  "Forme mit deinem Körper einen Buchstaben, ich rate ihn.",
-  "Sprich wie ein Radiomoderator und kündige „unseren Song“ an.",
-  "Mach 5 Liegestütze (Knie erlaubt).",
-  "Erzähl mir in 20 Sekunden eine peinliche Story.",
-  "Sprich 15 Sekunden wie ein Pirat.",
-  "Erfinde ein Codewort, das „Ich vermisse dich“ bedeutet.",
-  "Beschreibe mich in 5 Adjektiven.",
-  "Sing eine Zeile eines Liedes, die zu uns passt.",
-  "Mach 10 Sekunden Luftgitarre.",
-  "Zeichne in 30 Sekunden ein Bild von uns und zeig es.",
-  "Tu 10 Sekunden so, als würdest du schweben (Moonwalk möglich).",
-  "Sprich 10 Sekunden nur mit Flüsterstimme.",
-  "Schreibe „Ich mag dich“ in einer anderen Sprache.",
-  "Stell dein Lieblingsgetränk wie ein Gourmet vor.",
-  "Zeichne dein Lieblingsessen in 20 Sekunden.",
-  "Baue eine Papierfliegerin und lass sie fliegen (wenn möglich).",
-  "Mach eine 5‑Sekunden‑Modelpose.",
-  "Zähle 10 Dinge auf, die du an dir magst.",
-  "Tu so, als würdest du mir einen Heiratsantrag machen (witzig).",
-  "Erfinde einen Zungenbrecher mit meinem Namen.",
-  "Nenne 5 Dinge, für die du dankbar bist – schnell!",
-  "Spiele 10 Sekunden Luftschlagzeug.",
-  "Mach deine beste „unschuldig“-Miene 5 Sekunden lang.",
-  "Zeige 5 Sekunden lang dein süßestes Lächeln.",
-  "Erkläre in 15 Sekunden, warum wir ein gutes Team sind.",
-  "Erfinde ein 30‑Sekunden‑Minispiel und leite mich an.",
-  "Beschreibe unseren perfekten Tag in 20 Sekunden.",
-  "Schicke drei Emojis, die deine Zukunft beschreiben.",
-  "Erzähle, was du zuletzt gegoogelt hast (wenn ok).",
-  "Erfinde eine neue Begrüßung nur für uns.",
-  "Nenne 3 gemeinsame Ziele für den nächsten Monat.",
-  "Mach eine Geräusch‑Imitation (ich rate das Ding).",
-  "Beschreibe mich in einer Metapher.",
-  "Erfinde einen peppigen Spitznamen für mich.",
-  "Schicke ein Foto von etwas, das wie ein Herz aussieht (wenn ok).",
-  "Baue aus Kissen eine „Burg“ und zeig sie.",
-  "Tu so, als wärest du Navi und lotsest mich in die Küche.",
-  "Mach eine Zeitlupe‑ und eine Vorspulen‑Bewegung.",
-  "Leite eine 15‑Sekunden‑Atemübung an.",
-  "Führe 10 Kniebeugen aus und zähle mit.",
-  "Male ein Herz auf deine Hand und zeig es.",
-  "Erfinde eine Mini‑Liebeserklärung mit genau 10 Wörtern.",
-  "Spiele 10 Sekunden pantomimisch ein Tier, ich rate.",
-  "Schicke mir drei Dinge, die du heute gelernt hast.",
-  "Erkläre einen Gegenstand in deiner Nähe wie in einer Auktion.",
-  "Stelle eine Szene nach, in der du mich zum Lachen bringst.",
-  "Sprich 15 Sekunden im übertriebenen Dialekt.",
-  "Entwerfe ein kleines Logo nur für uns (skizzieren).",
-  "Mach eine Yoga‑Pose und halte sie 10 Sekunden.",
-  "Leite mich an, eine lustige Pose zu machen.",
-  "Schicke ein Sprachnotiz‑Gedicht (mind. 10 Sekunden).",
-  "Spiele 10 Sekunden einen Roboter.",
-  "Erfinde eine Challenge für morgen und versprich sie umzusetzen.",
-  "Erzähle eine 1‑Satz‑Gruselgeschichte.",
-  "Sage 3 Gründe, warum du mich magst.",
-  "Spiele 10 Sekunden Luftklavier.",
-  "Schicke drei zufällige Emojis – ich erfinde eine Story dazu.",
-  "Beschreibe deinen Tag in 7 Wörtern.",
-  "Sprich 10 Sekunden wie ein Nachrichtensprecher.",
-  "Erkläre in 15 Sekunden deinen Lieblingsfilm.",
-  "Tu so, als würdest du mir ein Geheimnis ohne Ton erzählen.",
-  "Halte 10 Sekunden so still, als hinge das Video.",
-  "Erfinde ein Spiel mit einem Würfel (falls vorhanden).",
-  "Sprich 15 Sekunden in Reimen über Essen.",
-  "Leite ein 10‑Sekunden‑Dehnprogramm an.",
-  "Zeichne ein Mini‑Comics von uns (3 Panels).",
-  "Schicke mir einen Mini‑Zungenbrecher.",
-  "Erkläre, warum heute ein guter Tag war.",
-  "Beschreibe mich in Farben.",
-  "Zähle 10 Dinge in deinem Zimmer auf – schnell!",
-  "Erfinde eine 3‑Schritte‑Morgenroutine für uns.",
-  "Sprich 10 Sekunden lang nur in Fragen.",
-  "Beschreibe, wie sich Geborgenheit anfühlt.",
-  "Erfinde ein Ferien‑Motto für uns.",
-  "Schreibe ein Akrostichon mit meinem Namen.",
-  "Mach 5 Sprünge und rufe bei jedem „Yeah!“.",
-  "Beschreibe, was du gerade riechst/hörst/siehst – schnell.",
-  "Schicke mir einen Screenshot deiner Musik‑Playlist (wenn ok)."
+   "Mach ein Selfie mit deiner witzigsten Grimasse und schick es mir.",
+  "Sprich 30 Sekunden lang nur in Reimen.",
+  "Mach ein Geräusch, das zu deinem aktuellen Gefühl passt.",
+  "Sing mir den Refrain eines zufälligen Liedes vor.",
+  "Imitiere 20 Sekunden lang eine berühmte Person.",
+  "Sag deinen nächsten Satz mit einer völlig übertriebenen Betonung.",
+  "Zeig mir deine beste Tanzbewegung – mindestens 15 Sekunden.",
+  "Beschreibe mich mit drei Fantasiewörtern, die es gar nicht gibt.",
+  "Male mit deinem Finger in die Luft und ich muss raten, was es ist.",
+  "Tu so, als wärst du ein Nachrichtensprecher und verkünde eine „Breaking News“.",
+  "Sprich die nächsten 3 Sätze mit einer Roboter-Stimme.",
+  "Sag mir ein Kompliment, ohne dabei das Wort ‚du‘ zu benutzen.",
+  "Mach deine beste Tierimitation für 10 Sekunden.",
+  "Führe eine fiktive Wettervorhersage für morgen auf.",
+  "Erfinde ein neues Wort und erkläre, was es bedeutet.",
+  "Stell dich hin und tu so, als würdest du eine Rede halten.",
+  "Rede 15 Sekunden lang in einer Fantasiesprache.",
+  "Imitiere den Klang eines Weckers, bis ich lache.",
+  "Tu so, als würdest du eine Sportmoderation live kommentieren.",
+  "Stell dich hin und klatsch 10 Sekunden lang übertrieben dramatisch.",
+  "Schreib mir ein Mini-Gedicht in nur vier Wörtern.",
+  "Erfinde ein neues Emoji und beschreibe es.",
+  "Tu so, als wärst du ein Verkäufer und ich dein Kunde.",
+  "Mach dein bestes ‚böse schauen‘ Gesicht für 5 Sekunden.",
+  "Sag einen Zungenbrecher dreimal hintereinander.",
+  "Beschreibe ein alltägliches Ding so, als wär es ein Luxusprodukt.",
+  "Erzähle eine witzige Fake-Geschichte über uns.",
+  "Mach ein Herz mit deinen Händen und halte es in die Kamera.",
+  "Rede 20 Sekunden lang, als würdest du im Theater auftreten.",
+  "Sag 5 Sekunden lang nur „Ja“ in verschiedenen Tönen.",
+  "Erfinde einen neuen Spitznamen für mich.",
+  "Mach ein Tiergeräusch und ich muss raten, welches es ist.",
+  "Sag mir 3 Eigenschaften, die du an mir magst.",
+  "Erfinde einen Mini-Song mit meinem Namen darin.",
+  "Mach 10 Sekunden lang einen Werbespot über Wasser.",
+  "Rede 10 Sekunden nur mit Flüsterstimme.",
+  "Sag einen Satz, als würdest du in Zeitlupe sprechen.",
+  "Sag 5 Sätze, ohne dabei Buchstaben mit ‚A‘ zu benutzen.",
+  "Tu so, als würdest du gerade ein Geheimnis verraten.",
+  "Mach 5 Hampelmänner und sag dabei meinen Namen.",
+  "Stell dir vor, du wärst ein Pirat, und sag was Passendes.",
+  "Tu so, als würdest du einen Zauber wirken.",
+  "Sag den nächsten Satz, als wärst du in einem Actionfilm.",
+  "Schick mir ein Bild von einem Gegenstand, der gerade in deiner Nähe ist.",
+  "Mach ein Selfie, als würdest du erschrocken sein.",
+  "Tu so, als wärst du ein Lehrer, der mich ausschimpft.",
+  "Sag mir einen Satz, als wärst du ein Schauspieler in einer Liebesszene.",
+  "Mach einen Witz, auch wenn er schlecht ist.",
+  "Erfinde eine kurze Geschichte mit den Worten: ‚Kaffee‘, ‚Mond‘, ‚Chaos‘.",
+  "Sag mir einen Satz rückwärts."
 ];
-const TRUTH_SPICY=[ "Was würdest du mir nur flüsternd ins Ohr sagen?","Welche geheime Fantasie würdest du mit mir ausprobieren?","Was war bisher dein kuss-intensivster Moment mit mir?","Welche Berührung lässt dir sofort warm werden?","Welche 3 Wörter beschreiben unser spicy-Level?" ];
-const DARE_SPICY=[ "Schicke eine süße (nicht explizite) Sprachnachricht mit Komplimenten.","Beschreibe mir flüsternd unser perfektes Kuss-Szenario.","Wähle einen Körperteil und gib ihm verbal 3 Sterne-Bewertungen 😉","Sende 3 Codewörter für einen spicy Abend.","Sag mir 10 Sekunden lang nur ‚du bist heiß‘ – in Variationen." ];
+const TRUTH_SPICY = [
+  "Was war bisher dein wildester Gedanke beim Küssen?",
+  "Welches Körperteil von mir gefällt dir am meisten?",
+  "Hast du schon mal an mich gedacht, bevor du eingeschlafen bist – und wie genau?",
+  "Welche Art von Berührung macht dich sofort schwach?",
+  "Welches ist deine absolute Lieblingsstellung?",
+  "Was war dein erster Gedanke, als du mich das erste Mal attraktiv fandest?",
+  "Hast du schon mal einen erotischen Traum von mir gehabt? Erzähl kurz.",
+  "Was turnt dich am meisten an: Blickkontakt, Berührung oder Stimme?",
+  "Was war deine bisher verrückteste Fantasie?",
+  "Wo würdest du am liebsten spontan mit mir intim werden?",
+  "Hast du schon mal absichtlich anzügliche Nachrichten verschickt?",
+  "Welche Kleidung findest du an mir am heißesten?",
+  "Was ist deine geheime erogene Zone?",
+  "Wann war dir etwas in einem intimen Moment peinlich?",
+  "Welche Art von Küssen magst du am liebsten?",
+  "Was war die längste Zeit, die du ohne Sex ausgehalten hast?",
+  "Was bringt dich mehr in Stimmung: Worte oder Berührungen?",
+  "Hast du schon mal absichtlich provoziert, um mich heiß zu machen?",
+  "Welches ist der verrückteste Ort, an dem du dir Sex vorstellen könntest?",
+  "Glaubst du, du bist eher dominant oder eher verspielt im Bett?",
+  "Hast du schon mal beim Küssen an mehr gedacht?",
+  "Welches Outfit würdest du gerne mal im Bett ausprobieren?",
+  "Hast du schon mal extra langsam geflirtet, um Spannung aufzubauen?",
+  "Was war die intensivste Fantasie, die du je hattest?",
+  "Wo würdest du dir wünschen, dass ich dich jetzt küsse?",
+  "Welche Art von Dirty Talk bringt dich am meisten in Stimmung?",
+  "Hast du schon mal absichtlich jemanden eifersüchtig gemacht?",
+  "Was war dein bisher heißestes Erlebnis?",
+  "Was würdest du niemals im Bett ausprobieren?",
+  "Was war das längste Vorspiel, das du je hattest?",
+  "Magst du lieber langsame oder schnelle Bewegungen im Bett?",
+  "Welches Geräusch machst du beim Sex unbewusst?",
+  "Womit könnte ich dich am schnellsten verführen?",
+  "Was war das verrückteste, das dir während des Sex passiert ist?",
+  "Hast du schon mal bei einer Fantasie gedacht: ‚Das erzähl ich niemandem‘?",
+  "Welches Wort macht dich sofort an?",
+  "Hast du jemals beim Küssen absichtlich etwas verlängert, nur um mich zu necken?",
+  "Was wäre ein No-Go für dich beim Sex?",
+  "Mit welchem Gegenstand würdest du experimentieren, wenn du müsstest?",
+  "Welche Stelle an meinem Körper würdest du am liebsten jetzt küssen?",
+  "Was findest du heißer: spontaner Quickie oder geplanter Abend?",
+  "Was bringt dich schneller zum Erröten: ein Kuss oder ein Kompliment?",
+  "Welche Art von Unterwäsche findest du am attraktivsten?",
+  "Würdest du eher ein langes Vorspiel oder direkten Sex bevorzugen?",
+  "Was war dein schärfster Traum überhaupt?",
+  "Welches Wort würdest du beim Sex niemals sagen?",
+  "Wann hast du das letzte Mal absichtlich an etwas Verbotenes gedacht?",
+  "Welches ist dein liebster Ort für Zärtlichkeiten?",
+  "Was würdest du gerne einmal im Bett ausprobieren, hast dich aber noch nicht getraut?"
+];
+const DARE_SPICY = [
+  "Flüstere mir dein heißestes Geheimnis ins Ohr – so als würdest du mich verführen.",
+  "Beschreibe mir in drei Sätzen dein perfektes Vorspiel.",
+  "Mach ein Foto von einem Körperteil (harmlos sexy, nicht nackt) und schick es mir.",
+  "Sag mir 10 Sekunden lang nur Dinge, die dich an mir heiß machen.",
+  "Schreibe mir eine kurze Fantasie in einer Sprachnachricht.",
+  "Imitiere für 15 Sekunden, wie du klingen würdest, wenn du sehr erregt bist.",
+  "Beschreibe mir dein Lieblingskuss-Szenario so detailliert wie möglich.",
+  "Schicke mir 3 Codewörter für Dinge, die du ausprobieren würdest.",
+  "Sag meinen Namen so, wie du es im Bett tun würdest.",
+  "Flüstere mir eine geheime Fantasie – aber ohne das Wort ‚Sex‘ zu benutzen.",
+  "Mach ein 5-Sekunden-Video, in dem du mir nur einen Kuss zuwirfst.",
+  "Sag 20 Sekunden lang nur ‚du bist heiß‘ in Variationen.",
+  "Gib einem Körperteil von mir eine 5-Sterne-Bewertung.",
+  "Beschreibe mir, wie du mich jetzt küssen würdest.",
+  "Tu so, als würdest du mir gerade einen leidenschaftlichen Kuss geben – aber nur per Beschreibung.",
+  "Schreibe mir eine Nachricht, die so klingt wie ein Dirty Talk – aber in Emojis.",
+  "Sage mir, was du bei unserem nächsten Date mit mir machen würdest – ohne das Wort ‚küssen‘.",
+  "Mach eine erotische Anpreisung über meine Lippen – als wärst du ein Verkäufer.",
+  "Schicke ein Selfie, bei dem du extra ‚süß und unschuldig‘ schaust.",
+  "Flüstere ein Wort, das dich sofort anmacht.",
+  "Sag mir, was du am liebsten in meinem Ohr flüstern würdest.",
+  "Beschreibe in drei Sätzen, wie du mich im Dunkeln finden würdest.",
+  "Sag mir drei Körperstellen, die ich sofort berühren sollte.",
+  "Schicke mir eine Sprachnachricht, in der du so klingst, als würdest du gerade verführt.",
+  "Sag mir drei Dinge, die du gerade gerne mit mir machen würdest.",
+  "Beschreibe, wie du dich nach einem leidenschaftlichen Kuss fühlen würdest.",
+  "Zeig mir deine ‚Verführungs-Blicke‘ im Selfie-Modus.",
+  "Sag mir, was du tun würdest, wenn wir jetzt alleine wären.",
+  "Sag mir das frechste Wort, das dir einfällt.",
+  "Sprich 15 Sekunden lang so, als würdest du Dirty Talk üben.",
+  "Beschreibe deine Lieblingsstellung – aber ohne sie beim Namen zu nennen.",
+  "Sag mir, wo du mich am liebsten berühren würdest.",
+  "Sende eine Nachricht, die klingt wie der Anfang einer heißen Geschichte.",
+  "Sag mir, welche Art von Kuss du jetzt von mir willst.",
+  "Schicke mir drei Emojis, die deine Stimmung gerade beschreiben.",
+  "Sag einen Satz, als würdest du gerade verführt werden.",
+  "Erfinde ein Fantasie-Rollenspiel und beschreibe die erste Szene.",
+  "Sag mir drei Wörter, die du am liebsten beim Küssen hörst.",
+  "Mach ein Foto, das so aussieht, als würdest du mir gerade einen Kuss geben.",
+  "Sag mir, was du mit meinen Händen anstellen würdest.",
+  "Sag mir, wie du mich umarmen würdest, wenn niemand hinschaut.",
+  "Sag mir, welche Art von Kompliment dich im Bett am meisten treffen würde.",
+  "Sag mir dein ‚sicheres Codewort‘, falls es zu heiß wird 😉.",
+  "Sag mir, welche Stelle an dir am empfindlichsten ist.",
+  "Sag mir, was dich sofort in Stimmung bringt – ohne es direkt zu nennen.",
+  "Sag mir drei Wörter, die du im Bett niemals hören willst.",
+  "Sag mir, was du an meiner Stimme am heißesten findest.",
+  "Beschreibe in drei Sätzen dein ‚perfektes erste Mal‘ – egal ob echt oder Fantasie.",
+  "Schicke ein Selfie, auf dem du extra verführerisch schaust.",
+  "Sag mir, welche Art von Überraschung im Schlafzimmer du spannend fändest."
+];
 const CATEGORIES = [
   "Früchte",
   "Gemüsesorten",
   "Getränke",
   "Eissorten",
-  "Süßigkeiten‑Marken",
+  "Süßigkeiten-Marken",
   "Kaffeespezialitäten",
   "Teesorten",
   "Brotsorten",
+  "Fast-Food-Ketten",
+  "Pizza-Beläge",
+  "Sandwich-Zutaten",
   "Käsesorten",
-  "Nudelarten",
-  "Automarken",
-  "Motorradmarken",
+  "Saucen",
+  "Frühstücksgerichte",
+  "Suppenarten",
+  "Nudelgerichte",
+  "Asiatische Gerichte",
+  "Desserts",
+  "Biersorten",
+  "Cocktails",
+  "Berufe",
   "Sportarten",
-  "Brettspiele",
-  "Kartenspiele",
-  "Videospiel‑Genres",
   "Musikinstrumente",
   "Musikrichtungen",
   "Filmgenres",
-  "Seriengenres",
-  "Berufe",
-  "Schulfächer",
-  "Studienfächer",
+  "Seriencharaktere",
+  "Cartoonfiguren",
+  "Superhelden",
+  "Videospiele",
+  "Markenklamotten",
+  "Schuhmarken",
+  "Autohersteller",
+  "Motorradmarken",
   "Länder",
-  "Hauptstädte",
-  "Städte in Deutschland",
-  "Städte in Europa",
-  "Flüsse",
-  "Seen",
-  "Gebirge",
-  "Farben",
-  "Formen",
-  "Kleidungsstücke",
-  "Schuharten",
-  "Accessoires",
-  "Kosmetikartikel",
+  "Städte",
+  "Bundesländer",
+  "Sprachen",
+  "Tierarten",
+  "Vogelarten",
+  "Meerestiere",
   "Hunderassen",
   "Katzenrassen",
-  "Vögel",
-  "Meerestiere",
-  "Insekten",
-  "Haushaltsgeräte",
-  "Werkzeuge",
-  "Baumarten",
-  "Blumen",
-  "Zimmerpflanzen",
-  "Gewürze",
-  "Kräuter",
-  "Backzutaten",
-  "Saucen",
-  "Fast‑Food‑Ketten",
-  "Supermarktketten",
-  "Elektronikmarken",
-  "Smartphone‑Modelle",
-  "Buchgenres",
-  "Autorinnen/Autoren",
-  "Märchenfiguren",
-  "Superhelden",
-  "Schurken",
-  "Cartoon‑Charaktere",
-  "Disney‑Figuren",
-  "Mythologische Wesen",
-  "Sternbilder",
-  "Planeten & Monde",
-  "Wetterphänomene",
-  "Hobbys",
-  "Outdoor‑Aktivitäten",
-  "Indoor‑Aktivitäten",
-  "Urlaubsländer",
-  "Reiseziele in Europa",
-  "Inseln",
-  "Strände",
-  "Sportvereine",
-  "Bundesliga‑Vereine",
-  "Olympische Disziplinen",
-  "Tanzstile",
-  "Yoga‑Posen",
-  "Fitnessübungen",
-  "Haustiere",
-  "Bauernhoftiere",
-  "Berühmte Bauwerke",
-  "Museen",
-  "Theaterstücke",
-  "Opern",
-  "Programmiersprachen",
-  "Frameworks",
-  "Datenbanken",
-  "Social‑Media‑Plattformen",
-  "Apps",
-  "Webseiten",
-  "Autoteile",
-  "Fahrradteile",
-  "Zugarten",
-  "Flugzeugtypen",
-  "Schiffe",
-  "Werkstoffe",
-  "Chemische Elemente",
-  "Chemische Verbindungen",
-  "Mathematische Begriffe",
-  "Physikalische Begriffe",
-  "Psychologische Begriffe",
-  "Philosophen",
-  "Sprachen",
-  "Dialekte",
-  "Redewendungen",
-  "Sprichwörter"
+  "Berühmte Schauspieler",
+  "Berühmte Sänger",
+  "Historische Persönlichkeiten",
+  "Berühmte Sportler",
+  "Disney-Filme",
+  "Harry Potter Charaktere",
+  "Marvel-Charaktere",
+  "Anime-Charaktere",
+  "Brettspiele",
+  "Kartenspiele"
 ];
 const TRIVIA = [
-  { q: "Wie viele Minuten hat eine Stunde?", a: "60" },
-  { q: "Wie viele Sekunden hat eine Minute?", a: "60" },
-  { q: "Wie viele Tage hat ein Schaltjahr?", a: "366" },
-  { q: "Wie viele Kontinente hat die Erde?", a: "7" },
+  { q: "Wie viele Minuten hat ein Tag?", a: "1440" },
   { q: "Wie viele Bundesländer hat Deutschland?", a: "16" },
-  { q: "Wie heißt die Hauptstadt von Frankreich?", a: "Paris" },
-  { q: "Wie heißt die Hauptstadt von Italien?", a: "Rom" },
-  { q: "Wie heißt die Hauptstadt von Spanien?", a: "Madrid" },
-  { q: "Wie heißt die Hauptstadt von Portugal?", a: "Lissabon" },
-  { q: "Wie heißt die Hauptstadt von Österreich?", a: "Wien" },
-  { q: "Wie heißt die Hauptstadt der Schweiz?", a: "Bern" },
-  { q: "Wie heißt die Hauptstadt von Polen?", a: "Warschau" },
-  { q: "Wie heißt die Hauptstadt von Tschechien?", a: "Prag" },
-  { q: "Wie heißt die Hauptstadt von Ungarn?", a: "Budapest" },
-  { q: "Wie heißt die Hauptstadt der Niederlande?", a: "Amsterdam" },
-  { q: "Wie heißt die Hauptstadt von Belgien?", a: "Brüssel" },
-  { q: "Wie heißt die Hauptstadt von Dänemark?", a: "Kopenhagen" },
-  { q: "Wie heißt die Hauptstadt von Schweden?", a: "Stockholm" },
-  { q: "Wie heißt die Hauptstadt von Norwegen?", a: "Oslo" },
-  { q: "Wie heißt die Hauptstadt von Finnland?", a: "Helsinki" },
-  { q: "Wie heißt die Hauptstadt von Großbritannien?", a: "London" },
-  { q: "Wie heißt die Hauptstadt von Irland?", a: "Dublin" },
-  { q: "Wie heißt die Hauptstadt von Griechenland?", a: "Athen" },
-  { q: "Wie heißt die Hauptstadt der Türkei?", a: "Ankara" },
-  { q: "Wie heißt der höchste Berg der Erde?", a: "Mount Everest" },
-  { q: "Wie heißt der längste Fluss der Welt?", a: "Nil" },
-  { q: "Wie viele Planeten hat unser Sonnensystem?", a: "8" },
-  { q: "Welcher Planet ist der Sonne am nächsten?", a: "Merkur" },
-  { q: "Welcher Planet wird „Roter Planet“ genannt?", a: "Mars" },
-  { q: "Welcher Planet hat markante Ringe?", a: "Saturn" },
-  { q: "Welches Tier ist das größte Säugetier der Erde?", a: "Blauwal" },
-  { q: "Wie viele Zähne hat ein erwachsener Mensch normalerweise?", a: "32" },
-  { q: "Welches Gas ist Hauptbestandteil der Luft?", a: "Stickstoff" },
-  { q: "Welches chemische Symbol hat Wasser?", a: "H2O" },
-  { q: "Welches chemische Symbol hat Gold?", a: "Au" },
-  { q: "Welches chemische Symbol hat Natrium?", a: "Na" },
-  { q: "Wie viele Farben hat der Regenbogen?", a: "7" },
-  { q: "Welche Farbe entsteht aus Blau und Gelb?", a: "Grün" },
-  { q: "Welche Sprache hat die meisten Muttersprachler?", a: "Mandarin‑Chinesisch" },
-  { q: "Welcher Kontinent ist der größte?", a: "Asien" },
-  { q: "Welcher Kontinent ist der kleinste?", a: "Australien" },
-  { q: "Wie viele Buchstaben hat das deutsche Alphabet (ohne Umlaute/ß)?", a: "26" },
-  { q: "Welches eierlegende Säugetier ist bekannt?", a: "Schnabeltier" },
-  { q: "Welches Organ pumpt Blut durch den Körper?", a: "Herz" },
-  { q: "Welches Gas entsteht bei der Photosynthese?", a: "Sauerstoff" },
-  { q: "Wie viele Ecken hat ein Quadrat?", a: "4" },
-  { q: "Wie viele Seiten hat ein Dreieck?", a: "3" },
-  { q: "Wie nennt man die Lehre vom Leben?", a: "Biologie" },
-  { q: "Wie nennt man die Lehre von Stoffen?", a: "Chemie" },
-  { q: "Wie nennt man die Lehre von Zahlen?", a: "Mathematik" },
-  { q: "Welcher Fluss fließt durch Köln?", a: "Rhein" },
-  { q: "Welcher Fluss fließt durch Hamburg?", a: "Elbe" },
-  { q: "Welcher Fluss fließt durch München?", a: "Isar" },
-  { q: "An welches Meer grenzt Italien?", a: "Mittelmeer" },
-  { q: "Wie heißt Deutschlands höchster Berg?", a: "Zugspitze" },
-  { q: "Wie heißt der größte Ozean der Erde?", a: "Pazifik" },
-  { q: "Wie heißt der kleinste Ozean?", a: "Arktischer Ozean" },
-  { q: "Welche Währung nutzt die Eurozone?", a: "Euro" },
-  { q: "Wie viele Monate haben 31 Tage?", a: "7" },
-  { q: "Welcher Monat hat die wenigsten Tage?", a: "Februar" },
-  { q: "Wie viele Wochen hat ein Jahr ungefähr?", a: "52" },
-  { q: "Wie viele Millimeter sind ein Zentimeter?", a: "10" },
-  { q: "Wie viele Zentimeter sind ein Meter?", a: "100" },
-  { q: "Wie viele Meter sind ein Kilometer?", a: "1000" },
-  { q: "Wie nennt man 15 Minuten?", a: "Viertelstunde" },
-  { q: "Welches Insekt erzeugt Honig?", a: "Biene" },
-  { q: "Wie heißt das flächengrößte Land der Welt?", a: "Russland" },
-  { q: "Wie heißt die Hauptstadt der USA?", a: "Washington, D.C." },
-  { q: "Wie heißt die Hauptstadt von Kanada?", a: "Ottawa" },
   { q: "Wie heißt die Hauptstadt von Australien?", a: "Canberra" },
-  { q: "Wie heißt der längste Fluss Europas?", a: "Wolga" },
-  { q: "Welche Stadt nennt man die Stadt der Liebe?", a: "Paris" },
-  { q: "Welches Metall ist bei Raumtemperatur flüssig?", a: "Quecksilber" },
-  { q: "Wie viele Spieler stehen bei Fußball pro Team auf dem Feld?", a: "11" },
-  { q: "Wie viele Ecken hat ein Fünfeck?", a: "5" },
-  { q: "Welche Zahl ist eine Primzahl: 9 oder 11?", a: "11" },
-  { q: "Welche Form hat ein Stoppschild?", a: "Achteck" },
-  { q: "Wie nennt man fleischfressende Pflanzen?", a: "Karnivore Pflanzen" },
-  { q: "Wie nennt man junge Hunde?", a: "Welpen" },
-  { q: "Wie nennt man junge Katzen?", a: "Kätzchen" },
-  { q: "Wie heißt die größte (kälte)Wüste der Erde?", a: "Antarktis" },
-  { q: "Wie nennt man gefrorenes Wasser?", a: "Eis" },
-  { q: "Was misst ein Thermometer?", a: "Temperatur" },
-  { q: "Welcher Planet hat den Großen Roten Fleck?", a: "Jupiter" },
-  { q: "Welche Farben hat ein Schachbrett?", a: "Schwarz und Weiß" },
-  { q: "Wie nennt man gleich klingende, anders geschriebene Wörter?", a: "Homophone" },
-  { q: "Wie nennt man Wörter, die vorwärts wie rückwärts gleich sind?", a: "Palindrom" },
+  { q: "Wie viele Planeten hat unser Sonnensystem?", a: "8" },
+  { q: "Wie viele Farben hat die Flagge von Frankreich?", a: "3" },
+  { q: "Welches Tier wird als ‚König der Tiere‘ bezeichnet?", a: "Löwe" },
+  { q: "Wie viele Zähne hat ein erwachsener Mensch normalerweise?", a: "32" },
+  { q: "Welches Element hat das chemische Symbol O?", a: "Sauerstoff" },
+  { q: "In welchem Jahr fiel die Berliner Mauer?", a: "1989" },
+  { q: "Wie viele Kontinente gibt es auf der Erde?", a: "7" },
+  { q: "Wie viele Spieler stehen beim Fußball pro Team auf dem Feld?", a: "11" },
+  { q: "Welche Farbe entsteht, wenn man Blau und Gelb mischt?", a: "Grün" },
+  { q: "Wie viele Tage hat ein Schaltjahr?", a: "366" },
+  { q: "Wie viele Bundeskanzler hatte Deutschland bis 2025?", a: "10" },
+  { q: "Wer malte die Mona Lisa?", a: "Leonardo da Vinci" },
+  { q: "Wie heißt der höchste Berg der Welt?", a: "Mount Everest" },
+  { q: "Wie heißt die Hauptstadt von Kanada?", a: "Ottawa" },
+  { q: "Wie viele Tasten hat ein Klavier (Standard)?", a: "88" },
+  { q: "Welcher Planet ist der Sonne am nächsten?", a: "Merkur" },
+  { q: "Wie viele Buchstaben hat das deutsche Alphabet?", a: "26" },
+  { q: "Welches Tier legt die größten Eier?", a: "Strauß" },
+  { q: "Wie viele Herzen hat ein Oktopus?", a: "3" },
+  { q: "Welches Land hat die meisten Einwohner?", a: "Indien" },
+  { q: "Wie viele Knochen hat ein erwachsener Mensch?", a: "206" },
+  { q: "In welchem Jahr war die erste Mondlandung?", a: "1969" },
+  { q: "Wie viele Seiten hat ein Würfel?", a: "6" },
+  { q: "Wie viele Sekunden hat eine Stunde?", a: "3600" },
+  { q: "Wie heißt die Hauptstadt von Portugal?", a: "Lissabon" },
+  { q: "Welches Meer liegt zwischen Europa und Afrika?", a: "Mittelmeer" },
   { q: "Wie viele Beine hat eine Spinne?", a: "8" },
-  { q: "Wie viele Monate hat ein Jahr?", a: "12" },
-  { q: "Was ist schwerer: 1 kg Federn oder 1 kg Eisen?", a: "Beides gleich schwer" },
-  { q: "Zu welcher Tierklasse gehört der Frosch?", a: "Amphibien" },
-  { q: "Welches Vitamin bildet der Körper durch Sonne?", a: "Vitamin D" },
-  { q: "Wie heißt die Hauptstadt von Japan?", a: "Tokio" },
-  { q: "Wie heißt die Hauptstadt von China?", a: "Peking/Beijing" },
+  { q: "Wie heißt die kleinste Einheit eines Computerspeichers?", a: "Bit" },
+  { q: "Welche Farbe hat Chlorophyll?", a: "Grün" },
+  { q: "Wie viele Spieler hat ein Basketball-Team auf dem Feld?", a: "5" },
+  { q: "Wie viele Ecken hat ein Rechteck?", a: "4" },
+  { q: "Wer schrieb ‚Faust‘?", a: "Johann Wolfgang von Goethe" },
+  { q: "Wie heißt die Hauptstadt von Ägypten?", a: "Kairo" },
+  { q: "Welche Blutgruppe ist die seltenste?", a: "AB negativ" },
+  { q: "Wie viele Sterne sind auf der US-Flagge?", a: "50" },
+  { q: "Wie viele Zeitzonen hat die Erde?", a: "24" },
+  { q: "Wie viele Planeten haben Ringe im Sonnensystem?", a: "4" },
+  { q: "Wie viele Monate haben 31 Tage?", a: "7" },
   { q: "Wie heißt die Hauptstadt von Brasilien?", a: "Brasília" },
-  { q: "Wie heißt die Hauptstadt von Argentinien?", a: "Buenos Aires" },
-  { q: "Wie heißt die Hauptstadt von Mexiko?", a: "Mexiko‑Stadt" },
-  { q: "Welcher Vogel ist der größte und kann nicht fliegen?", a: "Strauß" },
-  { q: "Welche Wissenschaft untersucht das Verhalten?", a: "Psychologie" },
-  { q: "Welche Skala misst Erdbebenstärke?", a: "Richterskala" }
+  { q: "Welches ist das schnellste Landtier?", a: "Gepard" },
+  { q: "Welches Tier ist das größte auf der Erde?", a: "Blauwal" },
+  { q: "Wie viele Weltmeere gibt es?", a: "5" },
+  { q: "Wie heißt die Hauptstadt von Polen?", a: "Warschau" },
+  { q: "Welches ist das längste Fließgewässer der Welt?", a: "Nil" },
+  { q: "Wie viele Buchstaben hat das griechische Alphabet?", a: "24" },
+  { q: "Welche Farbe hat ein Smaragd?", a: "Grün" },
+  { q: "Wie viele Kontinente berührt der Äquator?", a: "3" }
 ];
 const MATCH_PROMPTS = [
   "Was wäre dein perfektes Date mit mir – vom Morgen bis zum Abend?",
   "Welche Reise passt gerade zu uns beiden – und warum?",
   "Welche Tradition sollen wir als Paar starten?",
   "Was möchtest du mit mir lernen, das uns verbindet?",
-  "Welche gemeinsame Erinnerung liebst du am meisten – warum?",
-  "Welche Eigenschaft an mir hilft dir im Alltag?",
-  "Welche 30‑Tage‑Challenge sollen wir zusammen probieren?",
-  "Welches Lied beschreibt uns am besten – und weshalb?",
-  "Welche Serie/Film sollen wir als Nächstes zusammen schauen?",
-  "Welcher Ort in der Stadt fühlt sich nach „uns“ an?",
-  "Was wünschst du dir, dass ich öfter spontan mache?",
-  "Welche kleinen Rituale machen uns glücklich?",
-  "Was ist dein Wunsch für nächstes Wochenende mit mir?",
-  "Welche Überraschung würdest du gerne für mich vorbereiten?",
-  "Welche Angewohnheit von mir findest du heimlich süß?",
-  "Was motiviert dich – und wie kann ich dich unterstützen?",
-  "Welche Punkte gehören auf unsere Bucket List?",
-  "Was ist ein perfektes Regenwetter‑Date?",
-  "Welche Eigenschaft macht uns als Team stark?",
-  "Was sollten wir jeden Monat einmal fix einplanen?",
-  "Welche Reise passt zu unserer Laune gerade?",
-  "Welche Komplimente wünschst du dir öfter von mir?",
-  "Welcher Moment hat unsere Beziehung verändert?",
-  "Was ist ein kleines Abenteuer, das wir sofort starten könnten?",
-  "Was kann ich tun, um dich an miesen Tagen zu trösten?",
-  "Welche gemeinsame Anschaffung wäre sinnvoll?",
-  "Was war eine richtig gute Entscheidung von uns?",
-  "Welche Farbe beschreibt unsere Beziehung – und warum?",
-  "Welche Grenze ist dir besonders wichtig?",
-  "Welche Überraschung von mir hat dich nachhaltig berührt?",
-  "Was ist dein Lieblingsfoto von uns – und wieso?",
-  "Was möchtest du mir öfter sagen?",
-  "Über welches Thema sollten wir mehr reden?",
-  "Welches Date‑Motto probieren wir als Nächstes?",
-  "Wie sähe ein Traum‑Valentinstag mit mir aus?",
-  "Welche Songzeile passt perfekt zu uns?",
-  "Wie sieht unser perfekter Sonntag aus?",
-  "Welche Eigenheit von mir verstehst du inzwischen besser?",
-  "Welche Erinnerung wünschst du dir für diesen Monat?",
-  "Was möchtest du an mir feiern?",
-  "Welche kleine Geste macht dich sofort weich?",
-  "Was willst du in 6 Monaten mit mir geschafft haben?",
-  "Welches Ritual vor dem Einschlafen wäre schön?",
-  "Wie definierst du Nähe?",
-  "Welche Sache vertraust du nur mir an?",
-  "Welche Aktivität verbindet uns am schnellsten?",
-  "Welche Love‑Language ist deine – wie zeige ich sie dir?",
-  "Welche Nachricht willst du morgens von mir lesen?",
-  "Welche Reise würdest du jederzeit wieder mit mir machen?",
-  "Was möchtest du, dass ich heute über dich lerne?",
-  "Welche neue Grenze hast du zuletzt gesetzt?",
-  "Welche Überraschung wünschst du dir im Alltag?",
-  "Welche Tradition aus deiner Kindheit möchtest du teilen?",
-  "Was gibt dir sofort Geborgenheit?",
-  "Welche Veränderung hat uns gutgetan?",
-  "Welche Challenge war schwer, aber hat uns gestärkt?",
-  "Welche Art von Dates fehlt uns?",
-  "Was möchtest du mir beibringen?",
-  "Was möchtest du von mir lernen?",
-  "Welche Sache verstehen nur wir beide?",
-  "Welche Gerüche oder Orte lösen bei dir Liebe aus?",
-  "Welche Worte willst du heute hören?",
-  "Was willst du, dass ich nie vergesse?",
-  "Welche Überraschung magst du gar nicht?",
-  "Welche Morgenroutine könnten wir testen?",
-  "Welcher Song ist „unser Song“ – und warum?",
-  "Welche Erfahrung möchtest du unbedingt mit mir teilen?",
-  "Was möchtest du über meine Träume wissen?",
-  "Welche Art von Fotos sollen wir mehr machen?",
-  "Welche Tätigkeiten geben dir mit mir Energie?",
-  "Welche Grenzen willst du klarer aussprechen?",
-  "Was ist dein Lieblingskompliment an mich?",
-  "Welche drei Dinge liebst du an uns?",
-  "Welche verrückte Reiseidee reizt dich?",
-  "Was gehört auf unsere gemeinsame Bucket List?",
-  "Welche Mini‑Überraschung könnte ich heute machen?",
-  "Was willst du mir noch in deiner Stadt zeigen?",
-  "Welches Essen ist „unser Essen“?",
-  "Welche Nachricht hat dich zuletzt besonders berührt?",
-  "Welche kleine Geste hatte große Wirkung?",
-  "Welche Frage hast du dich nie getraut zu stellen?",
-  "Welche Erinnerung möchtest du neu schreiben?",
-  "Was ist ein perfektes Winter‑Date?",
-  "Was ist ein perfektes Sommer‑Date?",
-  "Welche Aktivität hat dich zuletzt glücklich gemacht?",
-  "Wobei wünschst du dir, dass ich öfter den ersten Schritt mache?",
-  "Welche Ästhetik/Farbe passt zu uns?",
-  "Was wünschst du dir an unserem Jahrestag?",
-  "Welche späte‑Abend‑Aktivität wäre schön?",
-  "Was war unsere lustigste Panne bisher?",
-  "Welche Stärke an mir siehst du, die ich unterschätze?",
-  "Was möchtest du, dass wir nächstes Jahr über uns sagen können?",
-  "Welche Herausforderung wollen wir gemeinsam angehen?",
-  "Welche romantische Kleinigkeit vergesse ich manchmal?",
-  "Wie fühlt sich „Zuhause“ mit mir an?",
-  "Welche Worte geben dir Mut von mir?",
-  "Welche Gewohnheit von mir verstehst du noch nicht?",
-  "Welche neue Sache willst du mit mir ausprobieren?",
-  "Welche Verbindung spürst du sofort, wenn wir telefonieren?",
-  "Was möchtest du an mir entdecken, das ich selten zeige?",
-  "Welche Orte möchtest du mit mir noch sehen?",
-  "Was würde unser Zukunfts‑Ich uns raten?"
+  "Wie sieht unser idealer Sonntag aus – Stunde für Stunde?",
+  "Welches Gericht ist unser Signature-Dinner – und wer macht was?",
+  "Welche drei Wörter beschreiben uns gerade am besten?",
+  "Welcher Song gehört auf unsere gemeinsame Playlist – und wieso?",
+  "Welche Stadt sollten wir als Nächstes besuchen – drei Dinge, die wir dort tun?",
+  "Welches Hobby könnten wir zusammen beginnen?",
+  "Welche kleinen Alltagsmomente machen dich mit mir am glücklichsten?",
+  "Welche Eigenschaft bewunderst du an mir im Alltag?",
+  "Welche gemeinsame Challenge für 30 Tage würdest du wählen?",
+  "Wie sieht unser perfektes Zuhause aus – drei Details?",
+  "Welches Spiel/Activity ist unser Go-to für Regentage?",
+  "Welche Serie/Film würden wir zusammen neu anfangen – Popcorn-Regeln?",
+  "Welches Frühstück ist ‚typisch wir‘?",
+  "Was wäre unser gemeinsamer Business-Pitch in 2 Sätzen?",
+  "Welches Duft/Ort erinnert dich sofort an uns?",
+  "Welche drei Dinge packen wir immer zuerst in den Koffer?",
+  "Wie würden wir einen Mini-Feiertag nur für uns feiern?",
+  "Welche Überraschung würdest du mir im Alltag machen?",
+  "Welche Werte sind uns beiden am wichtigsten – nenne drei.",
+  "Wenn wir ein Motto für dieses Jahr hätten – welches?",
+  "Welche Aktivität abends entspannt uns beide am schnellsten?",
+  "Welche Sport/Bewegungsroutine könnten wir zusammen etablieren?",
+  "Wie würden wir einen Stromausfallabend gestalten?",
+  "Welche gemeinsame Spar-Goal-Idee motiviert uns – wofür?",
+  "Welche Skills bringst du ein, welche ich – Dream-Team-Aufteilung?",
+  "Welcher Ort in der Stadt ist unsere ‚Geheim-Location‘?",
+  "Was wäre unser Ritual vor dem Schlafengehen?",
+  "Welche Art von Fotos/Videos sollten wir regelmäßig festhalten?",
+  "Welche drei Regeln würden wir für ‚Handyfreie Zeit‘ machen?",
+  "Wie sieht unser perfekter Roadtrip aus – Route, Snack, Playlist?",
+  "Welche Sprache/Instrument würden wir zusammen angehen – wieso?",
+  "Wie würden wir unser ‚Erfolge feiern‘-Ritual gestalten?",
+  "Welche kleine Gewohnheit von mir magst du besonders – und warum?",
+  "Welche Saison passt am besten zu uns – und was machen wir dann?",
+  "Welche Art von Picknick wäre ‚100 % wir‘?",
+  "Welche drei Bücher/Podcasts könnten wir gemeinsam entdecken?",
+  "Wie würden wir einen freien Samstag strukturieren – ohne Termine?",
+  "Welche Café-Bestellung beschreibt uns beide am besten?",
+  "Welche zwei Orte in der Natur sollten wir öfter besuchen?",
+  "Welche ‚Date-Night-Themes‘ könnten wir rotieren (z. B. Kochen, Spiele, Kunst)?",
+  "Welche Worte/Sätze geben uns beiden sofort gute Laune?",
+  "Welche Bucket-List-Idee für dieses Jahr ist realistisch und cool?",
+  "Wie teilen wir Aufgaben auf, damit es sich fair anfühlt?",
+  "Welche drei Dinge sollten immer in unserer Küche vorrätig sein?",
+  "Welche Farbe/Einrichtungsstil ist ‚wir‘ – und in welchem Raum?",
+  "Welche Gewohnheit wollen wir gemeinsam aufbauen – erste kleine Schritte?",
+  "Wie sieht unser perfekter Wintertag aus?",
+  "Welche Art von Ehrenamt/Good-Deed könnten wir zusammen machen?",
+  "Welche Regeln hätten wir für ein ‚Digital Detox‘-Wochenende?",
+  "Welche Art von Erinnerungsbuch/Album wollen wir führen – wie oft updaten?",
+  "Welche zwei ‚Comfort Movies‘ sind unsere – warum genau die?",
+  "Welche Essenskombination beschreibt unseren Geschmack am besten?",
+  "Welche Morgenroutine zu zweit wäre realistisch und schön?",
+  "Welche drei ‚Nein, danke‘-Dinge schützen unsere gemeinsame Zeit?",
+  "Welche kleine Geste lässt dich sofort geliebt fühlen – wie bauen wir sie ein?",
+  "Welches ‚Reset-Ritual‘ hilft uns nach stressigen Tagen?",
+  "Welche jährliche Reise/Trip-Tradition wollen wir fest einplanen?",
+  "Welche Fragen sollten wir uns einmal im Monat stellen – Check-in?",
+  "Welches gemeinsame Projekt (DIY/Creative) starten wir – erster Schritt?",
+  "Welche Überraschung würdest du für einen ‚einfach so‘-Tag planen?",
+  "Welche zwei Restaurants/Cuisines sind ‚unsere‘ – und was bestellen wir?",
+  "Wie sieht unser perfekter Spaziergang aus – Route, Gesprächsthema, Snack?",
+  "Welche drei Songs sind unser Soundtrack – wofür steht jeder?",
+  "Welche Mini-Dates passen in 20 Minuten – drei Ideen?",
+  "Welche ‚Gute-Laune-Liste‘ wollen wir anlegen – Top-5-Punkte?",
+  "Welche Regeln hätten wir für faire Diskussionen – nenne drei positive Do’s?",
+  "Welche gemeinsamen Lernziele setzen wir für die nächsten 3 Monate?",
+  "Welche Deko/Objekte erzählen unsere Geschichte – welche würden wir wählen?",
+  "Wie sieht unser perfekter Feierabend am Mittwoch aus?",
+  "Welches ‚Jahresprojekt‘ (z. B. 12 Museen/12 Wanderungen) wählen wir?"
 ];
 
-/* ------ String-Ähnlichkeit (ohne \p{…}) ------ */
+/* ------ String-Ähnlichkeit ------ */
 function stripDiacritics(s){return (s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"");}
 function norm(s){return stripDiacritics(String(s)).toLowerCase().replace(/[^a-z0-9äöüß\s]/gi,"").replace(/\s+/g," ").trim();}
 function tokens(s){return norm(s).split(" ").filter(Boolean);}
@@ -766,7 +669,11 @@ function Section({ title, children }) {
   );
 }
 function Pill({ children }) {
-  return <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-neutral-800 text-white/80 border border-neutral-700">{children}</span>;
+  return (
+    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-neutral-800 text-white/80 border border-neutral-700">
+      {children}
+    </span>
+  );
 }
 function Timer({ seconds, onFinish }) {
   const [time,setTime]=useState(seconds); const prev=useRef(time); const tRef=useRef(null);
@@ -778,7 +685,7 @@ function Timer({ seconds, onFinish }) {
     <div className="w-full">
       <div className="flex items-center justify-between mb-1"><span className="text-sm text-white/80">Timer</span><span className="text-sm font-mono text-white/90">{time}s</span></div>
       <div className="h-2 w-full bg-neutral-800 rounded-full overflow-hidden">
-        <div className="h-full bg-white/90" style={{width:`${pct}%`,transition:"width 1s linear"}}/>
+        <div className="h-full bg-white/90" style={{width:`${pct}%`,transition:"width 1s linear"}} />
       </div>
     </div>
   );
@@ -789,13 +696,10 @@ function BottomNav({ tab, setTab }) {
     { id: "fav", icon: Star, label: "Favoriten" },
     { id: "settings", icon: Settings, label: "Einstellungen" },
   ];
-
   return (
     <div
       className="fixed bottom-0 left-0 right-0 bg-black/60 backdrop-blur-lg border-t border-white/10 flex justify-around py-2 z-50"
-      style={{
-        paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-      }}
+      style={{paddingBottom: "max(12px, env(safe-area-inset-bottom))"}}
     >
       {items.map((it) => {
         const Icon = it.icon;
@@ -804,9 +708,7 @@ function BottomNav({ tab, setTab }) {
             whileTap={{ scale: 0.9 }}
             key={it.id}
             onClick={() => setTab(it.id)}
-            className={`flex flex-col items-center text-xs ${
-              tab === it.id ? "text-white" : "text-white/60"
-            }`}
+            className={`flex flex-col items-center text-xs ${tab === it.id ? "text-white" : "text-white/60"}`}
           >
             <Icon size={22} />
             {it.label}
@@ -867,6 +769,34 @@ function ModeSelector({ mode, setMode }) {
   );
 }
 
+/* ===================================================
+   No-Duplicate Helpers (Session History pro Modus)
+=================================================== */
+const keyOf = (item) => {
+  if (typeof item === "string") return item;
+  if (item && typeof item === "object") {
+    if ("q" in item) return String(item.q);
+    return JSON.stringify(item);
+  }
+  return String(item ?? "");
+};
+function uniquePick(seed, pool = [], used = []) {
+  const usedSet = new Set((used || []).map(keyOf));
+  const remaining = pool.filter((x) => !usedSet.has(keyOf(x)));
+  const source = remaining.length ? remaining : pool; // wenn leer: Neustart
+  const picker = makePicker(seed);
+  return source.length ? picker(source) : "";
+}
+function pushHistory(setter, key, value) {
+  const k = Array.isArray(value) ? value.join("|") : value;
+  if (!k) return;
+  setter((prev) => {
+    const arr = prev[key] ? [...prev[key]] : [];
+    if (!arr.includes(k)) arr.push(k);
+    return { ...prev, [key]: arr };
+  });
+}
+
 /* ------ App ------ */
 export default function App(){
   const [tab,setTab]=useState("home");
@@ -875,44 +805,94 @@ export default function App(){
   const [seconds,setSeconds]=useState(60);
   const [spice,setSpice]=useState(true);
   const [myRole,setMyRole]=useState("p1");
-  const [p1,setP1]=useState(0); const [p2,setP2]=useState(0);
   const [round,setRound]=useState(1);
+  const [todChoice,setTodChoice]=useState(null); // 🚩 erst nach Klick befüllen
+
+  // Karten-History (keine Doppelten pro Room/Modus)
+  const [history, setHistory] = useState({
+    wyr: [],
+    tod_truth: [],
+    tod_dare: [],
+    match: [],
+    cat: [],
+    trivia: [],
+  });
+
+  /* ------ User-Cards (Settings → Karten hinzufügen) ------ */
+  const [userCards, setUserCards] = useState(()=>{
+    try{
+      const raw = localStorage.getItem("ccg_userCards");
+      if(raw) return JSON.parse(raw);
+    }catch{}
+    return { wyr:[], tod_truth:[], tod_dare:[], match:[], cat:[], trivia:[] };
+  });
+  useEffect(()=>{
+    try{ localStorage.setItem("ccg_userCards", JSON.stringify(userCards)); }catch{}
+  },[userCards]);
 
   // Presence indicator
   const [onlineCount,setOnlineCount]=useState(1);
 
-  // ToD Auswahl
-  const [todChoice,setTodChoice]=useState("truth"); // "truth" | "dare"
-
-  const WYR_POOL=useMemo(()=>[...WYR_CUTE,...(spice?WYR_SPICY:[])],[spice]);
-  const TRUTH_POOL=useMemo(()=>[...TRUTH_PROMPTS,...(spice?TRUTH_SPICY:[])],[spice]);
-  const DARE_POOL=useMemo(()=>[...DARE_PROMPTS,...(spice?DARE_SPICY:[])],[spice]);
-
-  const rng=useMemo(()=>makeRNG(`${room}:${round}:${mode}:${spice}`),[room,round,mode,spice]);
-  const pick=useMemo(()=>makePicker(`${room}:${round}:${mode}:${spice}`),[room,round,mode,spice]);
-
-  const card=useMemo(()=>{
-    if(mode==="wyr"){ return {title:"Would You Rather",lines:[pick(WYR_POOL)]}; }
-    if(mode==="tod"){ return {title:"Truth or Dare",truth:pick(TRUTH_POOL),dare:pick(DARE_POOL)}; }
-    if(mode==="match"){ return {title:"Match Meter",lines:[pick(MATCH_PROMPTS)]}; }
-    if(mode==="cat"){ return {title:"Categories",lines:[`Buchstabe: ${randomLetter(rng)}`,`Kategorie: ${pick(CATEGORIES)}`]}; }
-    if(mode==="trivia"){ const t=pick(TRIVIA); return {title:"Speed Trivia",lines:[t.q],solution:t.a}; }
-    return {title:"",lines:[]};
-  },[mode,pick,rng,WYR_POOL,TRUTH_POOL,DARE_POOL]);
-
   // Match Meter
-  const [mmAnsP1,setMMAnsP1]=useState(""); const [mmAnsP2,setMMAnsP2]=useState("");
-  const [mmRcvP1,setMmRcvP1]=useState(""); const [mmRcvP2,setMmRcvP2]=useState("");
-  const [mmResolved,setMMResolved]=useState(false); const [mmScore,setMMScore]=useState(0);
+  const [mmAnsP1,setMMAnsP1]=useState("");
+  const [mmAnsP2,setMMAnsP2]=useState("");
+  const [mmRcvP1,setMmRcvP1]=useState("");
+  const [mmRcvP2,setMmRcvP2]=useState("");
+  const [mmResolved,setMMResolved]=useState(false);
+  const [mmScore,setMMScore]=useState(0);
   const [mmHearts,setMMHearts]=useState(false);
 
+  // Trivia
   const [triviaShowSolution,setTriviaShowSolution]=useState(false);
 
-  // Realtime (Presence + State)
+  /* ------ Pools inkl. User-Cards ------ */
+  const WYR_POOL   = useMemo(()=>[...WYR_CUTE, ...(spice?WYR_SPICY:[]), ...(userCards.wyr||[])],[spice,userCards]);
+  const TRUTH_POOL = useMemo(()=>[...TRUTH_PROMPTS, ...(spice?TRUTH_SPICY:[]), ...(userCards.tod_truth||[])],[spice,userCards]);
+  const DARE_POOL  = useMemo(()=>[...DARE_PROMPTS, ...(spice?DARE_SPICY:[]), ...(userCards.tod_dare||[])],[spice,userCards]);
+  const CAT_POOL   = useMemo(()=>[...CATEGORIES, ...(userCards.cat||[])],[userCards]);
+  const TRIVIA_POOL= useMemo(()=>[...TRIVIA, ...(userCards.trivia||[])],[userCards]);
+  const MATCH_POOL = useMemo(()=>[...MATCH_PROMPTS, ...(userCards.match||[])],[userCards]);
+
+  const rng = useMemo(()=>makeRNG(`${room}:${round}:${mode}:${spice}`),[room,round,mode,spice]);
+
+  const card=useMemo(()=>{
+    const seed = `${room}:${round}:${mode}:${spice}`;
+    if(mode==="wyr"){
+      // SEQUENZIELL (wie gewünscht): Reihenfolge des Pools
+      const pool = WYR_POOL || [];
+      const idx = pool.length ? ((round - 1) % pool.length) : 0;
+      const line = pool[idx] || "";
+      return {title:"Would You Rather",lines:[line]};
+    }
+    if(mode==="tod"){
+      const t = uniquePick(seed+":t", TRUTH_POOL, history.tod_truth);
+      const d = uniquePick(seed+":d", DARE_POOL,  history.tod_dare);
+      return {title:"Truth or Dare",truth:t,dare:d};
+    }
+    if(mode==="match"){
+      const l = uniquePick(seed, MATCH_POOL, history.match);
+      return {title:"Match Meter",lines:[l]};
+    }
+    if(mode==="cat"){
+      const letter = `Buchstabe: ${randomLetter(rng)}`;
+      const cat = `Kategorie: ${uniquePick(seed, CAT_POOL, history.cat)}`;
+      return {title:"Categories",lines:[letter,cat]};
+    }
+    if(mode==="trivia"){
+      const t = uniquePick(seed, TRIVIA_POOL, history.trivia) || {};
+      return {title:"Speed Trivia",lines:[t.q||""],solution:t.a||""};
+    }
+    return {title:"",lines:[]};
+  },[mode,room,round,spice,rng,history,WYR_POOL,TRUTH_POOL,DARE_POOL,CAT_POOL,TRIVIA_POOL,MATCH_POOL]);
+
+  /* ------ Realtime (Presence + Broadcast) ------ */
   const clientKey=useMemo(()=>Math.random().toString(36).slice(2),[]);
-  const channelRef=useRef(null); const applyingRef=useRef(false);
+  const channelRef=useRef(null);
+  const applyingRef=useRef(false);
+
   useEffect(()=>{ if(!room) return;
-    if(channelRef.current){ supabase.removeChannel(channelRef.current); channelRef.current=null; }
+    if(channelRef.current){ try{ supabase.removeChannel(channelRef.current); }catch{} channelRef.current=null; }
+
     const ch=supabase.channel(`room-${room}`,{config:{presence:{key:clientKey}}});
 
     // Presence indicator
@@ -921,6 +901,7 @@ export default function App(){
       setOnlineCount(n || 1);
     });
 
+    // State Broadcast
     ch.on("broadcast",{event:"state"},(payload)=>{
       const {sender,data}=payload.payload||{}; if(sender===clientKey) return;
       applyingRef.current=true;
@@ -929,20 +910,28 @@ export default function App(){
       if(data.seconds!==undefined) setSeconds(data.seconds);
       if(data.spice!==undefined) setSpice(data.spice);
       if(data.todChoice!==undefined) setTodChoice(data.todChoice);
+      if(data.history!==undefined) setHistory(data.history);
+      if(data.userCards!==undefined) setUserCards(data.userCards);
       setTimeout(()=>{applyingRef.current=false;},0);
     });
+
+    // Match reveal Broadcast
     ch.on("broadcast",{event:"mm_reveal"},(payload)=>{
       const {sender,role,answer}=payload.payload||{}; if(sender===clientKey) return;
-      if(role==="p1") setMmRcvP1(answer||""); if(role==="p2") setMmRcvP2(answer||"");
+      if(role==="p1") setMmRcvP1(answer||"");
+      if(role==="p2") setMmRcvP2(answer||"");
     });
+
     ch.subscribe(async(status)=>{ if(status==="SUBSCRIBED"){ await ch.track({online_at:new Date().toISOString()}); }});
-    channelRef.current=ch; return()=>{try{supabase.removeChannel(ch);}catch{}};
-  },[room]);
+    channelRef.current=ch;
+
+    return()=>{ try{ supabase.removeChannel(ch);}catch{} };
+  },[room,clientKey]);
 
   const broadcast=(extra={})=>{ if(applyingRef.current) return; const ch=channelRef.current; if(!ch) return;
-    ch.send({type:"broadcast",event:"state",payload:{sender:clientKey,data:{mode,round,seconds,spice,todChoice,...extra}}});
+    ch.send({type:"broadcast",event:"state",payload:{sender:clientKey,data:{mode,round,seconds,spice,todChoice,history,userCards,...extra}}});
   };
-  useEffect(()=>{ broadcast(); },[mode,round,seconds,spice,todChoice]);
+  useEffect(()=>{ broadcast(); },[mode,round,seconds,spice,todChoice,history,userCards]);
 
   // Herz 3s
   useEffect(()=>{ if(mmHearts){ const t=setTimeout(()=>setMMHearts(false),3000); return()=>clearTimeout(t);} },[mmHearts]);
@@ -952,13 +941,81 @@ export default function App(){
     const s=similarity(a1,a2); setMMScore(s); setMMHearts(s===100); setMMResolved(true);
   },[mmRcvP1,mmRcvP2,mmAnsP1,mmAnsP2,mmResolved]);
 
-  function resolveMatch(){ const myAnswer=myRole==="p1"?mmAnsP1:mmAnsP2; if(myRole==="p1") setMmRcvP1(myAnswer||""); else setMmRcvP2(myAnswer||"");
-    const ch=channelRef.current; if(ch){ ch.send({type:"broadcast",event:"mm_reveal",payload:{sender:clientKey,role:myRole,answer:myAnswer||""}}); } }
+  /* ------ History-Aktualisierung ------ */
+  useEffect(()=>{
+    if(mode==="wyr"   && card?.lines?.[0]) pushHistory(setHistory,'wyr',card.lines[0]);
+    if(mode==="match" && card?.lines?.[0]) pushHistory(setHistory,'match',card.lines[0]);
+    if(mode==="cat"   && card?.lines?.length>=2) pushHistory(setHistory,'cat',[card.lines[0],card.lines[1]]);
+    if(mode==="trivia"&& card?.lines?.[0]) pushHistory(setHistory,'trivia',card.lines[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[mode,round,room,spice]);
 
-  function nextCard(){ setRound(r=>r+1); setTriviaShowSolution(false); if(mode==="match"){ setMMAnsP1("");setMMAnsP2("");setMmRcvP1("");setMmRcvP2("");setMMResolved(false);setMMScore(0);setMMHearts(false);} }
-  function prevCard(){ setRound(r=>Math.max(1,r-1)); setTriviaShowSolution(false); }
+  useEffect(()=>{
+    if(mode!=="tod" || !todChoice) return;
+    if(todChoice==="truth" && card?.truth) pushHistory(setHistory,'tod_truth',card.truth);
+    if(todChoice==="dare"  && card?.dare)  pushHistory(setHistory,'tod_dare',card.dare);
+  },[todChoice,mode,card]);
+
+  function resolveMatch(){
+    const myAnswer=myRole==="p1"?mmAnsP1:mmAnsP2;
+    if(myRole==="p1") setMmRcvP1(myAnswer||""); else setMmRcvP2(myAnswer||"");
+    const ch=channelRef.current; if(ch){ ch.send({type:"broadcast",event:"mm_reveal",payload:{sender:clientKey,role:myRole,answer:myAnswer||""}}); }
+  }
+
+  function nextCard(){
+    setRound(r=>r+1);
+    setTriviaShowSolution(false);
+    if(mode==="match"){ setMMAnsP1("");setMMAnsP2("");setMmRcvP1("");setMmRcvP2("");setMMResolved(false);setMMScore(0);setMMHearts(false);} 
+    setTodChoice(null);
+  }
+  function prevCard(){ setRound(r=>Math.max(1,r-1)); setTriviaShowSolution(false); setTodChoice(null); }
 
   const theme = MODE_THEME[mode] || MODE_THEME.wyr;
+
+  /* ---------- Settings: Karten hinzufügen UI-States ---------- */
+  const [addMode, setAddMode] = useState("wyr"); // wyr | tod_truth | tod_dare | match | cat | trivia
+  const [addText, setAddText] = useState("");
+  const [addTriviaQ, setAddTriviaQ] = useState("");
+  const [addTriviaA, setAddTriviaA] = useState("");
+
+  function addUserCard(){
+    let updated = { ...userCards };
+    if(addMode === "trivia"){
+      const q = addTriviaQ?.trim(); const a = addTriviaA?.trim();
+      if(!q || !a) return;
+      updated.trivia = [...(updated.trivia||[]), { q, a }];
+      setAddTriviaQ(""); setAddTriviaA("");
+    } else {
+      const val = addText?.trim();
+      if(!val) return;
+      if(addMode === "wyr"){
+        updated.wyr = [...(updated.wyr||[]), val];
+      } else if(addMode === "tod_truth"){
+        updated.tod_truth = [...(updated.tod_truth||[]), val];
+      } else if(addMode === "tod_dare"){
+        updated.tod_dare = [...(updated.tod_dare||[]), val];
+      } else if(addMode === "match"){
+        updated.match = [...(updated.match||[]), val];
+      } else if(addMode === "cat"){
+        updated.cat = [...(updated.cat||[]), val];
+      }
+      setAddText("");
+    }
+    setUserCards(updated);
+    broadcast({ userCards: updated });
+  }
+
+  function deleteUserCard(modeKey, index){
+    setUserCards(prev=>{
+      const next = { ...prev };
+      const arr = [...(next[modeKey]||[])];
+      arr.splice(index,1);
+      next[modeKey] = arr;
+      try{ localStorage.setItem("ccg_userCards", JSON.stringify(next)); }catch{}
+      broadcast({ userCards: next });
+      return next;
+    });
+  }
 
   return (
     <div className="min-h-screen relative bg-gradient-to-b from-black via-neutral-950 to-black text-white overflow-hidden">
@@ -968,9 +1025,15 @@ export default function App(){
       {/* Herzregen */}
       <AnimatePresence>
         {mmHearts && (
-          <motion.div key="heart" initial={{scale:0,opacity:0}} animate={{scale:3,opacity:1}} exit={{scale:0.5,opacity:0}} transition={{duration:0.8}}
-            className="absolute inset-0 flex items-center justify-center z-50">
-            <Heart size={140} className="text-pink-500 drop-shadow-[0_0_30px_rgba(236,72,153,0.7)]"/>
+          <motion.div
+            key="heart"
+            initial={{scale:0,opacity:0}}
+            animate={{scale:3,opacity:1}}
+            exit={{scale:0.5,opacity:0}}
+            transition={{duration:0.8}}
+            className="absolute inset-0 flex items-center justify-center z-50"
+          >
+            <Heart size={140} className="text-pink-500 drop-shadow-[0_0_30px_rgba(236,72,153,0.7)]" />
           </motion.div>
         )}
       </AnimatePresence>
@@ -983,7 +1046,7 @@ export default function App(){
           <h1 className="text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-rose-400 via-pink-300 to-sky-300">
             Couple Call Games
           </h1>
-          <Pill>v2.0</Pill>
+          <Pill>v3.1</Pill>
         </header>
 
         {/* HOME */}
@@ -999,16 +1062,24 @@ export default function App(){
                       Gemeinsamer Room Code
                       <span className={`inline-block w-3 h-3 rounded-full ${onlineCount>=2?'bg-green-500':'bg-red-500'}`} />
                     </label>
-                    <input className="w-full px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800 focus:outline-none focus:ring-2 focus:ring-rose-400/40"
-                      value={room} onChange={e=>setRoom(e.target.value)} placeholder="z. B. 1234"/>
+                    <input
+                      className="w-full px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800 focus:outline-none focus:ring-2 focus:ring-rose-400/40"
+                      value={room}
+                      onChange={(e)=>setRoom(e.target.value)}
+                      placeholder="z. B. 1234"
+                    />
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-sm text-white/80">Timer (Sekunden)</label>
                     <div className="flex gap-2 flex-wrap">
                       {[30,45,60,90].map(s=>(
-                        <motion.button key={s} whileTap={{scale:0.95}} onClick={()=>setSeconds(s)}
-                          className={`px-3 py-2 rounded-xl border ${seconds===s?'bg-white text-black border-white':'bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800'}`}>
+                        <motion.button
+                          key={s}
+                          whileTap={{scale:0.95}}
+                          onClick={()=>setSeconds(s)}
+                          className={`px-3 py-2 rounded-xl border ${seconds===s?'bg-white text-black border-white':'bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800'}`}
+                        >
                           {s}s
                         </motion.button>
                       ))}
@@ -1017,8 +1088,11 @@ export default function App(){
 
                   <div className="space-y-2">
                     <label className="text-sm text-white/80">Spicy Mode</label>
-                    <motion.button whileTap={{scale:0.95}} onClick={()=>setSpice(!spice)}
-                      className={`ml-3 px-3 py-2 rounded-xl border ${spice?'bg-rose-600 text-white border-rose-600 hover:bg-rose-500':'bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800'}`}>
+                    <motion.button
+                      whileTap={{scale:0.95}}
+                      onClick={()=>setSpice(!spice)}
+                      className={`ml-3 px-3 py-2 rounded-xl border ${spice?'bg-rose-600 text-white border-rose-600 hover:bg-rose-500':'bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800'}`}
+                    >
                       {spice?'Spicy an':'Spicy aus'}
                     </motion.button>
                     <div className="text-xs text-white/60">Gilt für WYR / ToD</div>
@@ -1027,12 +1101,18 @@ export default function App(){
                   <div className="space-y-2">
                     <label className="text-sm text-white/80">Rolle nur für (Match Meter)</label>
                     <div className="flex items-center gap-2">
-                      <motion.button whileTap={{scale:0.95}} onClick={()=>setMyRole("p1")}
-                        className={`px-3 py-2 rounded-xl border flex items-center gap-2 ${myRole==="p1"?'bg-white text-black border-white ring-2 ring-pink-400':'bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800'}`}>
+                      <motion.button
+                        whileTap={{scale:0.95}}
+                        onClick={()=>setMyRole("p1")}
+                        className={`px-3 py-2 rounded-xl border flex items-center gap-2 ${myRole==="p1"?'bg-white text-black border-white ring-2 ring-pink-400':'bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800'}`}
+                      >
                         {myRole==="p1"&&<Check size={16}/>} Ich bin Spieler 1
                       </motion.button>
-                      <motion.button whileTap={{scale:0.95}} onClick={()=>setMyRole("p2")}
-                        className={`px-3 py-2 rounded-xl border flex items-center gap-2 ${myRole==="p2"?'bg-white text-black border-white ring-2 ring-sky-400':'bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800'}`}>
+                      <motion.button
+                        whileTap={{scale:0.95}}
+                        onClick={()=>setMyRole("p2")}
+                        className={`px-3 py-2 rounded-xl border flex items-center gap-2 ${myRole==="p2"?'bg-white text-black border-white ring-2 ring-sky-400':'bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800'}`}
+                      >
                         {myRole==="p2"&&<Check size={16}/>} Ich bin Spieler 2
                       </motion.button>
                     </div>
@@ -1040,23 +1120,35 @@ export default function App(){
                 </div>
 
                 {/* RECHTS – bunte Modusliste (Listenlayout) */}
-                <ModeSelector mode={mode} setMode={setMode}/>
+                <ModeSelector mode={mode} setMode={setMode} />
               </div>
             </Section>
 
-            <div className="my-6"><Timer seconds={seconds} onFinish={()=>{}} /></div>
+            <div className="my-6">
+              <Timer seconds={seconds} onFinish={()=>{}} />
+            </div>
 
             {/* Aktuelle Karte */}
             <Section title="Aktuelle Karte">
               <AnimatePresence mode="wait">
-                <motion.div key={`${mode}-${round}-${todChoice}`} initial={{y:30,opacity:0,scale:0.98}} animate={{y:0,opacity:1,scale:1}} exit={{y:-20,opacity:0,scale:0.98}} transition={{type:"spring",stiffness:220,damping:20}} className="text-lg">
+                <motion.div
+                  key={`${mode}-${round}-${todChoice}`}
+                  initial={{y:30,opacity:0,scale:0.98}}
+                  animate={{y:0,opacity:1,scale:1}}
+                  exit={{y:-20,opacity:0,scale:0.98}}
+                  transition={{type:"spring",stiffness:220,damping:20}}
+                  className="text-lg"
+                >
                   <div className="text-xl md:text-2xl font-semibold mb-3">{card.title}</div>
 
-                  {mode==="wyr" && <div className="mb-4">{card.lines[0]}</div>}
+                  {/* WYR */}
+                  {mode==="wyr" && (
+                    <div className="mb-4">{card.lines[0]}</div>
+                  )}
 
+                  {/* ToD */}
                   {mode==="tod" && (
                     <div className="space-y-3">
-                      {/* Auswahl-Buttons */}
                       <div className="flex gap-2">
                         <motion.button
                           whileTap={{scale:0.95}}
@@ -1074,30 +1166,42 @@ export default function App(){
                         </motion.button>
                       </div>
 
-                      {/* Nur die gewählte Aufgabe anzeigen */}
-                      <div className="text-base md:text-lg">
-                        {todChoice==="truth" ? (
-                          <div><strong>Wahrheit:</strong> {card.truth}</div>
-                        ) : (
-                          <div><strong>Pflicht:</strong> {card.dare}</div>
-                        )}
-                      </div>
+                      {todChoice && (
+                        <div className="text-base md:text-lg">
+                          {todChoice==="truth" ? (
+                            <div><strong>Wahrheit:</strong> {card.truth}</div>
+                          ) : (
+                            <div><strong>Pflicht:</strong> {card.dare}</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
+                  {/* Match Meter */}
                   {mode==="match" && (
                     <div className="space-y-4">
                       <div className="text-white/80 text-sm">{card.lines?.[0]}</div>
                       <div className="grid md:grid-cols-2 gap-3">
                         <div>
                           <label className="text-xs text-white/70">Antwort Spieler 1</label>
-                          <input className="w-full px-3 py-2 mt-1 rounded-xl bg-neutral-900 border border-neutral-800"
-                            value={mmAnsP1} onChange={e=>setMMAnsP1(e.target.value)} disabled={myRole!=="p1"} placeholder="Antwort von P1"/>
+                          <input
+                            className="w-full px-3 py-2 mt-1 rounded-xl bg-neutral-900 border border-neutral-800"
+                            value={mmAnsP1}
+                            onChange={(e)=>setMMAnsP1(e.target.value)}
+                            disabled={myRole!=="p1"}
+                            placeholder="Antwort von P1"
+                          />
                         </div>
                         <div>
                           <label className="text-xs text-white/70">Antwort Spieler 2</label>
-                          <input className="w-full px-3 py-2 mt-1 rounded-xl bg-neutral-900 border border-neutral-800"
-                            value={mmAnsP2} onChange={e=>setMMAnsP2(e.target.value)} disabled={myRole!=="p2"} placeholder="Antwort von P2"/>
+                          <input
+                            className="w-full px-3 py-2 mt-1 rounded-xl bg-neutral-900 border border-neutral-800"
+                            value={mmAnsP2}
+                            onChange={(e)=>setMMAnsP2(e.target.value)}
+                            disabled={myRole!=="p2"}
+                            placeholder="Antwort von P2"
+                          />
                         </div>
                       </div>
                       {!mmResolved ? (
@@ -1113,8 +1217,14 @@ export default function App(){
                     </div>
                   )}
 
-                  {mode==="cat" && (<div className="space-y-2">{card.lines?.map((ln,i)=>(<div key={i}>{ln}</div>))}</div>)}
+                  {/* Categories */}
+                  {mode==="cat" && (
+                    <div className="space-y-2">
+                      {card.lines?.map((ln,i)=>(<div key={i}>{ln}</div>))}
+                    </div>
+                  )}
 
+                  {/* Trivia */}
                   {mode==="trivia" && (
                     <div>
                       <div className="mb-2">{card.lines[0]}</div>
@@ -1127,8 +1237,12 @@ export default function App(){
 
                   {/* Navigation */}
                   <div className="mt-6 flex gap-3">
-                    <motion.button whileTap={{scale:0.95}} onClick={prevCard} className="px-4 py-2 rounded-lg bg-neutral-900 border border-neutral-800">Zurück</motion.button>
-                    <motion.button whileTap={{scale:0.95}} onClick={nextCard} className="px-4 py-2 rounded-lg bg-white text-black">Nächste Karte</motion.button>
+                    <motion.button whileTap={{scale:0.95}} onClick={prevCard} className="px-4 py-2 rounded-lg bg-neutral-900 border border-neutral-800">
+                      Zurück
+                    </motion.button>
+                    <motion.button whileTap={{scale:0.95}} onClick={nextCard} className="px-4 py-2 rounded-lg bg-white text-black">
+                      Nächste Karte
+                    </motion.button>
                   </div>
                 </motion.div>
               </AnimatePresence>
@@ -1136,12 +1250,141 @@ export default function App(){
           </>
         )}
 
-        {/* Favoriten/Settings – Coming soon */}
-        {tab==="fav" && (<Section title="Favoriten"><p className="text-sm text-white/70">✨Coming soon✨</p></Section>)}
-        {tab==="settings" && (<Section title="Einstellungen"><p className="text-sm text-white/70">✨Coming soon✨</p></Section>)}
+        {/* Favoriten – Coming soon */}
+        {tab==="fav" && (
+          <Section title="Favoriten">
+            <p className="text-sm text-white/70">✨Coming soon✨</p>
+          </Section>
+        )}
+
+        {/* Einstellungen */}
+        {tab==="settings" && (
+          <Section title="Einstellungen">
+            <div className="space-y-6">
+              {/* Karten hinzufügen */}
+              <div className="rounded-xl border border-neutral-800 p-4 bg-neutral-900/60">
+                <div className="text-lg font-semibold mb-2">Karten hinzufügen</div>
+
+                <div className="grid md:grid-cols-3 gap-3 items-start">
+                  <div className="space-y-2">
+                    <label className="text-sm text-white/80">Spielmodus</label>
+                    <select
+                      className="w-full px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800"
+                      value={addMode}
+                      onChange={e=>{ setAddMode(e.target.value); setAddText(""); setAddTriviaQ(""); setAddTriviaA(""); }}
+                    >
+                      <option value="wyr">Would You Rather</option>
+                      <option value="tod_truth">Truth (Wahrheit)</option>
+                      <option value="tod_dare">Dare (Pflicht)</option>
+                      <option value="match">Match Meter</option>
+                      <option value="cat">Categories</option>
+                      <option value="trivia">Speed Trivia</option>
+                    </select>
+                  </div>
+
+                  {/* Inputs */}
+                  {addMode !== "trivia" ? (
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm text-white/80">Kartentext</label>
+                      <input
+                        className="w-full px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800"
+                        value={addText}
+                        onChange={e=>setAddText(e.target.value)}
+                        placeholder={
+                          addMode==="wyr" ? "WYR-Text…" :
+                          addMode==="tod_truth" ? "Wahrheit-Frage…" :
+                          addMode==="tod_dare" ? "Pflicht-Aufgabe…" :
+                          addMode==="match" ? "Match-Prompt…" :
+                          "Kategorie…"
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-2 md:col-span-2">
+                      <div className="grid md:grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-sm text-white/80">Trivia-Frage</label>
+                          <input
+                            className="w-full px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800"
+                            value={addTriviaQ}
+                            onChange={e=>setAddTriviaQ(e.target.value)}
+                            placeholder="Frage…"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm text-white/80">Antwort</label>
+                          <input
+                            className="w-full px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800"
+                            value={addTriviaA}
+                            onChange={e=>setAddTriviaA(e.target.value)}
+                            placeholder="Antwort…"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-3">
+                  <motion.button
+                    whileTap={{scale:0.95}}
+                    onClick={addUserCard}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-black font-semibold"
+                  >
+                    <Plus size={18}/> Karte hinzufügen
+                  </motion.button>
+                </div>
+
+                {/* Übersicht der hinzugefügten Karten + Delete */}
+                <div className="mt-6 grid md:grid-cols-2 gap-4">
+                  {[
+                    ["wyr","WYR"],
+                    ["tod_truth","Truth"],
+                    ["tod_dare","Dare"],
+                    ["match","Match"],
+                    ["cat","Categories"],
+                    ["trivia","Trivia"]
+                  ].map(([key,label])=>(
+                    <div key={key} className="rounded-lg border border-neutral-800 p-3 bg-neutral-900/40">
+                      <div className="text-sm font-semibold mb-2">{label} – eigene Karten ({(userCards[key]||[]).length})</div>
+                      <div className="space-y-2 max-h-48 overflow-auto pr-1">
+                        {(userCards[key]||[]).map((item,idx)=>(
+                          <div key={idx} className="flex items-start gap-2 text-sm">
+                            <div className="flex-1">
+                              {key!=="trivia" ? (
+                                <span className="text-white/90">{String(item)}</span>
+                              ) : (
+                                <span className="text-white/90"><strong>Q:</strong> {item.q} <span className="text-white/60">/</span> <strong>A:</strong> {item.a}</span>
+                              )}
+                            </div>
+                            <button
+                              onClick={()=>deleteUserCard(key, idx)}
+                              className="shrink-0 p-1 rounded-lg bg-neutral-800 hover:bg-neutral-700"
+                              title="Löschen"
+                            >
+                              <Trash2 size={16}/>
+                            </button>
+                          </div>
+                        ))}
+                        {(userCards[key]||[]).length===0 && (
+                          <div className="text-xs text-white/50">Noch keine Karten hinzugefügt.</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Platzhalter für weitere Settings */}
+              <div className="rounded-xl border border-neutral-800 p-4 bg-neutral-900/60">
+                <div className="text-sm text-white/70">Weitere Einstellungen – coming soon</div>
+              </div>
+            </div>
+          </Section>
+        )}
       </div>
 
-      <BottomNav tab={tab} setTab={setTab}/>
+      <BottomNav tab={tab} setTab={setTab} />
     </div>
   );
 }
