@@ -1,8 +1,0 @@
-# docs/_config.yml
-title: Couple Call Game
-url: "https://sharryboy88.github.io"
-baseurl: "/couple-call-game"   # exakt dein Repo-Name!
-plugins: []                    # keine Plugins
-theme:                         # leer lassen = kein Theme, keine SCSS
-markdown: kramdown
-exclude: []                    # Jekyll soll nichts extra ausschließen
