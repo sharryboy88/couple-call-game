@@ -148,7 +148,7 @@ const WYR_SPICY = [
   "Würdest du eher beim Sex laut den Nachbarn stören oder peinlich still sein?",
   "Würdest du eher deine Lieblingsstellung für immer verlieren oder nie wieder eine neue ausprobieren dürfen?",
   "Würdest du eher Sex im Zelt beim Camping oder im Luxushotel haben?",
-  "Würdest du eher Sex mit vollem Risiko erwischt zu werden oder 100 % sicher im Schlafzimmer?", 
+  "Würdest du eher Sex mit vollem Risiko erwischt zu werden oder 100 % sicher im Schlafzimmer?",  
   "Würdest du lieber jedes Mal ,wenn du Sex hast lachen müssen oder weinen?",
   "Würdest du eher nie wieder Küssen oder nie wieder Kuscheln?",
   "Würdest du lieber deine geheimsten Fantasien verraten oder die deines/deiner Partner:in erfahren?",
@@ -796,6 +796,12 @@ function pushHistory(setter, key, value) {
     return { ...prev, [key]: arr };
   });
 }
+// NEU: sequenziell aus Pool wählen (immer nächste Ungesehene)
+function sequentialPickFrom(pool = [], used = []) {
+  const usedSet = new Set((used || []).map(keyOf));
+  const next = pool.find(x => !usedSet.has(keyOf(x)));
+  return next ?? (pool[0] ?? "");
+}
 
 /* ------ App ------ */
 export default function App(){
@@ -846,7 +852,8 @@ export default function App(){
   const [triviaShowSolution,setTriviaShowSolution]=useState(false);
 
   /* ------ Pools inkl. User-Cards ------ */
-  const WYR_POOL   = useMemo(()=>[...WYR_CUTE, ...(spice?WYR_SPICY:[]), ...(userCards.wyr||[])],[spice,userCards]);
+  // WYR: Bei Spicy NUR spicy-Pool, sonst nur Cute (+ eigene Karten)
+  const WYR_POOL   = useMemo(()=>[...(spice ? WYR_SPICY : WYR_CUTE), ...(userCards.wyr||[])],[spice,userCards]);
   const TRUTH_POOL = useMemo(()=>[...TRUTH_PROMPTS, ...(spice?TRUTH_SPICY:[]), ...(userCards.tod_truth||[])],[spice,userCards]);
   const DARE_POOL  = useMemo(()=>[...DARE_PROMPTS, ...(spice?DARE_SPICY:[]), ...(userCards.tod_dare||[])],[spice,userCards]);
   const CAT_POOL   = useMemo(()=>[...CATEGORIES, ...(userCards.cat||[])],[userCards]);
@@ -865,21 +872,22 @@ export default function App(){
       return {title:"Would You Rather",lines:[line]};
     }
     if(mode==="tod"){
-      const t = uniquePick(seed+":t", TRUTH_POOL, history.tod_truth);
-      const d = uniquePick(seed+":d", DARE_POOL,  history.tod_dare);
+      const t = sequentialPickFrom(TRUTH_POOL, history.tod_truth);
+      const d = sequentialPickFrom(DARE_POOL,  history.tod_dare);
       return {title:"Truth or Dare",truth:t,dare:d};
     }
     if(mode==="match"){
-      const l = uniquePick(seed, MATCH_POOL, history.match);
+      const l = sequentialPickFrom(MATCH_POOL, history.match);
       return {title:"Match Meter",lines:[l]};
     }
     if(mode==="cat"){
       const letter = `Buchstabe: ${randomLetter(rng)}`;
-      const cat = `Kategorie: ${uniquePick(seed, CAT_POOL, history.cat)}`;
+      const catVal = sequentialPickFrom(CAT_POOL, history.cat);
+      const cat = `Kategorie: ${catVal}`;
       return {title:"Categories",lines:[letter,cat]};
     }
     if(mode==="trivia"){
-      const t = uniquePick(seed, TRIVIA_POOL, history.trivia) || {};
+      const t = sequentialPickFrom(TRIVIA_POOL, history.trivia) || {};
       return {title:"Speed Trivia",lines:[t.q||""],solution:t.a||""};
     }
     return {title:"",lines:[]};
@@ -922,11 +930,21 @@ export default function App(){
       if(role==="p2") setMmRcvP2(answer||"");
     });
 
-    ch.subscribe(async(status)=>{ if(status==="SUBSCRIBED"){ await ch.track({online_at:new Date().toISOString()}); }});
+    ch.subscribe(async(status)=>{
+      if(status==="SUBSCRIBED"){
+        await ch.track({online_at:new Date().toISOString()});
+        // NEU: Initial-State senden (hilft bei Nachjoin)
+        ch.send({
+          type: "broadcast",
+          event: "state",
+          payload: { sender: clientKey, data: { mode, round, seconds, spice, todChoice, history, userCards } }
+        });
+      }
+    });
     channelRef.current=ch;
 
     return()=>{ try{ supabase.removeChannel(ch);}catch{} };
-  },[room,clientKey]);
+  },[room,clientKey,mode,round,seconds,spice,todChoice,history,userCards]);
 
   const broadcast=(extra={})=>{ if(applyingRef.current) return; const ch=channelRef.current; if(!ch) return;
     ch.send({type:"broadcast",event:"state",payload:{sender:clientKey,data:{mode,round,seconds,spice,todChoice,history,userCards,...extra}}});
@@ -936,10 +954,13 @@ export default function App(){
   // Herz 3s
   useEffect(()=>{ if(mmHearts){ const t=setTimeout(()=>setMMHearts(false),3000); return()=>clearTimeout(t);} },[mmHearts]);
 
-  // Match Auswertung
-  useEffect(()=>{ if(mmResolved) return; const a1=mmRcvP1||mmAnsP1; const a2=mmRcvP2||mmAnsP2; if(!a1||!a2) return;
-    const s=similarity(a1,a2); setMMScore(s); setMMHearts(s===100); setMMResolved(true);
-  },[mmRcvP1,mmRcvP2,mmAnsP1,mmAnsP2,mmResolved]);
+  // Match Auswertung – symmetrisch (nur wenn beide Reveals da sind)
+  useEffect(()=>{
+    if(mmResolved) return;
+    if(!mmRcvP1 || !mmRcvP2) return;
+    const s=similarity(mmRcvP1, mmRcvP2);
+    setMMScore(s); setMMHearts(s===100); setMMResolved(true);
+  },[mmRcvP1,mmRcvP2,mmResolved]);
 
   /* ------ History-Aktualisierung ------ */
   useEffect(()=>{
@@ -963,12 +984,24 @@ export default function App(){
   }
 
   function nextCard(){
-    setRound(r=>r+1);
-    setTriviaShowSolution(false);
-    if(mode==="match"){ setMMAnsP1("");setMMAnsP2("");setMmRcvP1("");setMmRcvP2("");setMMResolved(false);setMMScore(0);setMMHearts(false);} 
-    setTodChoice(null);
+    setRound(r=>{
+      const nr = r+1;
+      setTriviaShowSolution(false);
+      if(mode==="match"){ setMMAnsP1("");setMMAnsP2("");setMmRcvP1("");setMmRcvP2("");setMMResolved(false);setMMScore(0);setMMHearts(false);} 
+      setTodChoice(null);
+      // NEU: sofort syncen
+      broadcast({ round: nr, todChoice: null });
+      return nr;
+    });
   }
-  function prevCard(){ setRound(r=>Math.max(1,r-1)); setTriviaShowSolution(false); setTodChoice(null); }
+  function prevCard(){
+    setRound(r=>{
+      const nr = Math.max(1, r-1);
+      setTriviaShowSolution(false); setTodChoice(null);
+      broadcast({ round: nr, todChoice: null });
+      return nr;
+    });
+  }
 
   const theme = MODE_THEME[mode] || MODE_THEME.wyr;
 
@@ -1077,7 +1110,7 @@ export default function App(){
                         <motion.button
                           key={s}
                           whileTap={{scale:0.95}}
-                          onClick={()=>setSeconds(s)}
+                          onClick={()=>{ setSeconds(s); broadcast({ seconds: s }); }}
                           className={`px-3 py-2 rounded-xl border ${seconds===s?'bg-white text-black border-white':'bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800'}`}
                         >
                           {s}s
@@ -1090,7 +1123,7 @@ export default function App(){
                     <label className="text-sm text-white/80">Spicy Mode</label>
                     <motion.button
                       whileTap={{scale:0.95}}
-                      onClick={()=>setSpice(!spice)}
+                      onClick={()=>{ const ns=!spice; setSpice(ns); broadcast({spice: ns}); }}
                       className={`ml-3 px-3 py-2 rounded-xl border ${spice?'bg-rose-600 text-white border-rose-600 hover:bg-rose-500':'bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800'}`}
                     >
                       {spice?'Spicy an':'Spicy aus'}
@@ -1125,8 +1158,9 @@ export default function App(){
             </Section>
 
             <div className="my-6">
-              <Timer seconds={seconds} onFinish={()=>{}} />
-            </div>
+  <Timer seconds={seconds} onFinish={()=>{}} />
+</div>
+
 
             {/* Aktuelle Karte */}
             <Section title="Aktuelle Karte">
@@ -1152,14 +1186,14 @@ export default function App(){
                       <div className="flex gap-2">
                         <motion.button
                           whileTap={{scale:0.95}}
-                          onClick={()=>setTodChoice("truth")}
+                          onClick={()=>{ setTodChoice("truth"); broadcast({ todChoice: "truth" }); }}
                           className={`px-3 py-2 rounded-xl border ${todChoice==="truth" ? "bg-white text-black border-white" : "bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800"}`}
                         >
                           Wahrheit
                         </motion.button>
                         <motion.button
                           whileTap={{scale:0.95}}
-                          onClick={()=>setTodChoice("dare")}
+                          onClick={()=>{ setTodChoice("dare"); broadcast({ todChoice: "dare" }); }}
                           className={`px-3 py-2 rounded-xl border ${todChoice==="dare" ? "bg-white text-black border-white" : "bg-neutral-900 border-neutral-800 text-white/80 hover:bg-neutral-800"}`}
                         >
                           Pflicht
@@ -1204,16 +1238,53 @@ export default function App(){
                           />
                         </div>
                       </div>
-                      {!mmResolved ? (
-                        <motion.button whileTap={{scale:0.95}} onClick={resolveMatch} className="px-4 py-2 rounded-xl bg-white text-black font-semibold">
-                          Reveal & Auswerten
-                        </motion.button>
-                      ) : (
-                        <div className="text-sm text-white/80">
-                          Ähnlichkeit: <span className="font-mono text-white">{mmScore}%</span>
-                          {mmScore===100 && <span className="ml-2">❤️ Perfektes Match!</span>}
-                        </div>
-                      )}
+                      {(() => {
+  const iRevealed = (myRole === "p1") ? !!mmRcvP1 : !!mmRcvP2;
+  const otherRevealed = (myRole === "p1") ? !!mmRcvP2 : !!mmRcvP1;
+
+  if (mmResolved) {
+    return (
+      <div className="text-sm text-white/80">
+        Ähnlichkeit: <span className="font-mono text-white">{mmScore}%</span>
+        {mmScore===100 && <span className="ml-2">❤️ Perfektes Match!</span>}
+      </div>
+    );
+  }
+
+  if (!iRevealed) {
+    const myAnswerEmpty = (myRole==="p1" ? !mmAnsP1.trim() : !mmAnsP2.trim());
+    return (
+      <motion.button
+        whileTap={{ scale: 0.95 }}
+        onClick={resolveMatch}
+        disabled={myAnswerEmpty}
+        className={`px-4 py-2 rounded-xl font-semibold ${
+          myAnswerEmpty ? "bg-neutral-700 text-white/60 cursor-not-allowed" : "bg-white text-black"
+        }`}
+      >
+        Reveal & Auswerten
+      </motion.button>
+    );
+  }
+
+  // eigenes Reveal ist bereits erfolgt, warte auf die Gegenseite
+  if (!otherRevealed) {
+    const waitFor = myRole === "p1" ? "Spieler 2" : "Spieler 1";
+    return (
+      <div className="text-sm text-white/80 flex items-center gap-2">
+        <span className="inline-block h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+        Warten auf Antwort von {waitFor}…
+      </div>
+    );
+  }
+
+  // Beide revealed, Auswertung kommt unmittelbar durch useEffect → kurzer Hinweis optional
+  return (
+    <div className="text-sm text-white/80">
+      Auswertung…
+    </div>
+  );
+})()}
                     </div>
                   )}
 
