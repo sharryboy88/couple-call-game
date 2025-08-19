@@ -4,11 +4,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Heart, Home, Settings, Star, Check, Trash2, Plus } from "lucide-react";
 
 /****************************************************
- * Couple Call Games – 3.1
+ * Couple Call Games – 3.1 (Match Meter Reset Fix)
  * ✅ Fixes:
  *  - ToD zeigt erst Inhalte nach Auswahl
  *  - Match Meter Reveal & Auswerten + Herzanimation
  *  - Realtime Broadcast (State/ToD/Match)
+ *  - ➕ Match Meter Reset wird synchronisiert (kein hängenbleibendes Ergebnis)
  * 🆕 Features:
  *  - No Duplicates (Session History pro Room/Modus)
  *  - Settings → Karten hinzufügen (mit localStorage + Realtime-Sync)
@@ -898,7 +899,8 @@ export default function App(){
   const channelRef=useRef(null);
   const applyingRef=useRef(false);
 
-  useEffect(()=>{ if(!room) return;
+  useEffect(()=>{ 
+    if(!room) return;
     if(channelRef.current){ try{ supabase.removeChannel(channelRef.current); }catch{} channelRef.current=null; }
 
     const ch=supabase.channel(`room-${room}`,{config:{presence:{key:clientKey}}});
@@ -909,9 +911,10 @@ export default function App(){
       setOnlineCount(n || 1);
     });
 
-    // State Broadcast
+    // State empfangen
     ch.on("broadcast",{event:"state"},(payload)=>{
-      const {sender,data}=payload.payload||{}; if(sender===clientKey) return;
+      const {sender,data}=payload.payload||{}; 
+      if(sender===clientKey) return;
       applyingRef.current=true;
       if(data.mode!==undefined) setMode(data.mode);
       if(data.round!==undefined) setRound(data.round);
@@ -920,12 +923,41 @@ export default function App(){
       if(data.todChoice!==undefined) setTodChoice(data.todChoice);
       if(data.history!==undefined) setHistory(data.history);
       if(data.userCards!==undefined) setUserCards(data.userCards);
-      setTimeout(()=>{applyingRef.current=false;},0);
+
+      // ➕ Match Meter Felder übernehmen
+      if(data.mmAnsP1!==undefined) setMMAnsP1(data.mmAnsP1);
+      if(data.mmAnsP2!==undefined) setMMAnsP2(data.mmAnsP2);
+      if(data.mmRcvP1!==undefined) setMmRcvP1(data.mmRcvP1);
+      if(data.mmRcvP2!==undefined) setMmRcvP2(data.mmRcvP2);
+      if(data.mmResolved!==undefined) setMMResolved(data.mmResolved);
+      if(data.mmScore!==undefined) setMMScore(data.mmScore);
+      if(data.mmHearts!==undefined) setMMHearts(data.mmHearts);
+
+      setTimeout(()=>{applyingRef.current=false;},50);
+    });
+
+    // Handshake: Nur antworten, wenn jemand anderes fragt
+    ch.on("broadcast",{event:"request_state"},(payload)=>{
+      const {sender}=payload.payload||{}; 
+      if(sender===clientKey) return;
+      ch.send({
+        type:"broadcast",
+        event:"state",
+        payload:{ 
+          sender:clientKey, 
+          data:{
+            mode,round,seconds,spice,todChoice,history,userCards,
+            // ➕ Match Meter Status mitsenden
+            mmAnsP1, mmAnsP2, mmRcvP1, mmRcvP2, mmResolved, mmScore, mmHearts
+          } 
+        }
+      });
     });
 
     // Match reveal Broadcast
     ch.on("broadcast",{event:"mm_reveal"},(payload)=>{
-      const {sender,role,answer}=payload.payload||{}; if(sender===clientKey) return;
+      const {sender,role,answer}=payload.payload||{}; 
+      if(sender===clientKey) return;
       if(role==="p1") setMmRcvP1(answer||"");
       if(role==="p2") setMmRcvP2(answer||"");
     });
@@ -933,23 +965,42 @@ export default function App(){
     ch.subscribe(async(status)=>{
       if(status==="SUBSCRIBED"){
         await ch.track({online_at:new Date().toISOString()});
-        // NEU: Initial-State senden (hilft bei Nachjoin)
+        // Anfrage nach State (kein sofortiger eigener State)
         ch.send({
-          type: "broadcast",
-          event: "state",
-          payload: { sender: clientKey, data: { mode, round, seconds, spice, todChoice, history, userCards } }
+          type:"broadcast",
+          event:"request_state",
+          payload:{ sender:clientKey }
         });
       }
     });
     channelRef.current=ch;
 
     return()=>{ try{ supabase.removeChannel(ch);}catch{} };
-  },[room,clientKey,mode,round,seconds,spice,todChoice,history,userCards]);
+  // ⬇ Dependency-Liste enthält auch Match-Meter Felder,
+  //    damit ein aktueller Zustands-Snapshot gesendet werden kann,
+  //    falls jemand "request_state" schickt.
+  },[room,clientKey,mode,round,seconds,spice,todChoice,history,userCards,
+      mmAnsP1,mmAnsP2,mmRcvP1,mmRcvP2,mmResolved,mmScore,mmHearts]);
 
-  const broadcast=(extra={})=>{ if(applyingRef.current) return; const ch=channelRef.current; if(!ch) return;
-    ch.send({type:"broadcast",event:"state",payload:{sender:clientKey,data:{mode,round,seconds,spice,todChoice,history,userCards,...extra}}});
+  const broadcast=(extra={})=>{ 
+    if(applyingRef.current) return; 
+    const ch=channelRef.current; if(!ch) return;
+    ch.send({
+      type:"broadcast",
+      event:"state",
+      payload:{
+        sender:clientKey,
+        data:{
+          mode,round,seconds,spice,todChoice,history,userCards,
+          // ➕ Match Meter immer mitsenden, damit beide synchron bleiben
+          mmAnsP1,mmAnsP2,mmRcvP1,mmRcvP2,mmResolved,mmScore,mmHearts,
+          ...extra
+        }
+      }
+    });
   };
-  useEffect(()=>{ broadcast(); },[mode,round,seconds,spice,todChoice,history,userCards]);
+  useEffect(()=>{ broadcast(); },[mode,round,seconds,spice,todChoice,history,userCards,
+                                 mmAnsP1,mmAnsP2,mmRcvP1,mmRcvP2,mmResolved,mmScore,mmHearts]);
 
   // Herz 3s
   useEffect(()=>{ if(mmHearts){ const t=setTimeout(()=>setMMHearts(false),3000); return()=>clearTimeout(t);} },[mmHearts]);
@@ -960,6 +1011,9 @@ export default function App(){
     if(!mmRcvP1 || !mmRcvP2) return;
     const s=similarity(mmRcvP1, mmRcvP2);
     setMMScore(s); setMMHearts(s===100); setMMResolved(true);
+    // Option: Ergebnis auch sofort broadcasten (redundant, aber stabil)
+    broadcast({ mmScore: s, mmResolved: true, mmHearts: (s===100) });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[mmRcvP1,mmRcvP2,mmResolved]);
 
   /* ------ History-Aktualisierung ------ */
@@ -980,17 +1034,32 @@ export default function App(){
   function resolveMatch(){
     const myAnswer=myRole==="p1"?mmAnsP1:mmAnsP2;
     if(myRole==="p1") setMmRcvP1(myAnswer||""); else setMmRcvP2(myAnswer||"");
-    const ch=channelRef.current; if(ch){ ch.send({type:"broadcast",event:"mm_reveal",payload:{sender:clientKey,role:myRole,answer:myAnswer||""}}); }
+    const ch=channelRef.current; 
+    if(ch){ 
+      ch.send({type:"broadcast",event:"mm_reveal",payload:{sender:clientKey,role:myRole,answer:myAnswer||""}}); 
+    }
+  }
+
+  function resetMatchLocal(){
+    setMMAnsP1(""); setMMAnsP2("");
+    setMmRcvP1(""); setMmRcvP2("");
+    setMMResolved(false); setMMScore(0); setMMHearts(false);
   }
 
   function nextCard(){
     setRound(r=>{
       const nr = r+1;
       setTriviaShowSolution(false);
-      if(mode==="match"){ setMMAnsP1("");setMMAnsP2("");setMmRcvP1("");setMmRcvP2("");setMMResolved(false);setMMScore(0);setMMHearts(false);} 
       setTodChoice(null);
-      // NEU: sofort syncen
-      broadcast({ round: nr, todChoice: null });
+      // Match Meter lokal zurücksetzen
+      resetMatchLocal();
+      // ➕ Reset an Gegenstelle senden
+      broadcast({ 
+        round: nr, 
+        todChoice: null,
+        mmAnsP1: "", mmAnsP2: "", mmRcvP1: "", mmRcvP2: "",
+        mmResolved: false, mmScore: 0, mmHearts: false
+      });
       return nr;
     });
   }
@@ -998,7 +1067,13 @@ export default function App(){
     setRound(r=>{
       const nr = Math.max(1, r-1);
       setTriviaShowSolution(false); setTodChoice(null);
-      broadcast({ round: nr, todChoice: null });
+      resetMatchLocal();
+      broadcast({ 
+        round: nr, 
+        todChoice: null,
+        mmAnsP1: "", mmAnsP2: "", mmRcvP1: "", mmRcvP2: "",
+        mmResolved: false, mmScore: 0, mmHearts: false
+      });
       return nr;
     });
   }
@@ -1158,9 +1233,8 @@ export default function App(){
             </Section>
 
             <div className="my-6">
-  <Timer seconds={seconds} onFinish={()=>{}} />
-</div>
-
+              <Timer seconds={seconds} onFinish={()=>{}} />
+            </div>
 
             {/* Aktuelle Karte */}
             <Section title="Aktuelle Karte">
@@ -1239,52 +1313,52 @@ export default function App(){
                         </div>
                       </div>
                       {(() => {
-  const iRevealed = (myRole === "p1") ? !!mmRcvP1 : !!mmRcvP2;
-  const otherRevealed = (myRole === "p1") ? !!mmRcvP2 : !!mmRcvP1;
+                        const iRevealed = (myRole === "p1") ? !!mmRcvP1 : !!mmRcvP2;
+                        const otherRevealed = (myRole === "p1") ? !!mmRcvP2 : !!mmRcvP1;
 
-  if (mmResolved) {
-    return (
-      <div className="text-sm text-white/80">
-        Ähnlichkeit: <span className="font-mono text-white">{mmScore}%</span>
-        {mmScore===100 && <span className="ml-2">❤️ Perfektes Match!</span>}
-      </div>
-    );
-  }
+                        if (mmResolved) {
+                          return (
+                            <div className="text-sm text-white/80">
+                              Ähnlichkeit: <span className="font-mono text-white">{mmScore}%</span>
+                              {mmScore===100 && <span className="ml-2">❤️ Perfektes Match!</span>}
+                            </div>
+                          );
+                        }
 
-  if (!iRevealed) {
-    const myAnswerEmpty = (myRole==="p1" ? !mmAnsP1.trim() : !mmAnsP2.trim());
-    return (
-      <motion.button
-        whileTap={{ scale: 0.95 }}
-        onClick={resolveMatch}
-        disabled={myAnswerEmpty}
-        className={`px-4 py-2 rounded-xl font-semibold ${
-          myAnswerEmpty ? "bg-neutral-700 text-white/60 cursor-not-allowed" : "bg-white text-black"
-        }`}
-      >
-        Reveal & Auswerten
-      </motion.button>
-    );
-  }
+                        if (!iRevealed) {
+                          const myAnswerEmpty = (myRole==="p1" ? !mmAnsP1.trim() : !mmAnsP2.trim());
+                          return (
+                            <motion.button
+                              whileTap={{ scale: 0.95 }}
+                              onClick={resolveMatch}
+                              disabled={myAnswerEmpty}
+                              className={`px-4 py-2 rounded-xl font-semibold ${
+                                myAnswerEmpty ? "bg-neutral-700 text-white/60 cursor-not-allowed" : "bg-white text-black"
+                              }`}
+                            >
+                              Reveal & Auswerten
+                            </motion.button>
+                          );
+                        }
 
-  // eigenes Reveal ist bereits erfolgt, warte auf die Gegenseite
-  if (!otherRevealed) {
-    const waitFor = myRole === "p1" ? "Spieler 2" : "Spieler 1";
-    return (
-      <div className="text-sm text-white/80 flex items-center gap-2">
-        <span className="inline-block h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-        Warten auf Antwort von {waitFor}…
-      </div>
-    );
-  }
+                        // eigenes Reveal ist bereits erfolgt, warte auf die Gegenseite
+                        if (!otherRevealed) {
+                          const waitFor = myRole === "p1" ? "Spieler 2" : "Spieler 1";
+                          return (
+                            <div className="text-sm text-white/80 flex items-center gap-2">
+                              <span className="inline-block h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                              Warten auf Antwort von {waitFor}…
+                            </div>
+                          );
+                        }
 
-  // Beide revealed, Auswertung kommt unmittelbar durch useEffect → kurzer Hinweis optional
-  return (
-    <div className="text-sm text-white/80">
-      Auswertung…
-    </div>
-  );
-})()}
+                        // Beide revealed, Auswertung kommt unmittelbar durch useEffect → kurzer Hinweis optional
+                        return (
+                          <div className="text-sm text-white/80">
+                            Auswertung…
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 
